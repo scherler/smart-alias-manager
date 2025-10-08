@@ -1,279 +1,387 @@
 # 🚀 Smart Alias Manager
 
-**A powerful shell alias management system with AI-enhanced suggestions**
+**A powerful modular alias management system with JSON-based pack support**
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/scherler/smart-alias-manager)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Shell](https://img.shields.io/badge/shell-bash%20%7C%20zsh-orange.svg)](https://github.com/scherler/smart-alias-manager)
+[![Shell](https://img.shields.io/badge/shell-zsh-orange.svg)](https://github.com/scherler/smart-alias-manager)
 
 ## ✨ Features
 
-- **🤖 AI-Powered Suggestions**: Smart 2-3 letter alias recommendations based on command patterns
-- **📊 Command Analysis**: Analyze your shell history to identify optimization opportunities
-- **🔍 Intelligent Search**: Find existing aliases quickly with keyword search
-- **⚡ Interactive Creation**: Create new aliases with smart, conflict-free suggestions
-- **📚 Self-Documenting**: Built-in help system for all your aliases
-- **🎯 Efficiency First**: Following the "type less, do more" philosophy
+- **📦 Modular Packs**: Organize aliases in shareable JSON packs
+- **🔄 Auto-Loading**: Automatically load enabled packs on shell startup
+- **🌐 Remote Packs**: Load alias packs from URLs
+- **⚡ Enhanced jrun**: Jenkins runner with smart port checking
+- **🎯 Efficiency First**: 80%+ keystroke reduction
+- **📊 Analytics**: Built-in efficiency reporting
+- **🔍 Smart Search**: Find and manage aliases easily
 
 ## 🎬 Quick Start
 
 ```bash
 # Clone the repository
-git clone https://github.com/scherler/smart-alias-manager.git
-cd smart-alias-manager
+git clone https://github.com/scherler/smart-alias-manager.git /src/smart-alias-manager
 
-# Install
-./install.sh
+# Add to your ~/.zshrc (just 2 lines!)
+[[ -f /src/smart-alias-manager/src/loader.sh ]] && source /src/smart-alias-manager/src/loader.sh
+
+# Reload shell
+source ~/.zshrc
 
 # Start using
-ah          # Show help
-an 'git status'  # Create new alias
-af git      # Find git aliases
-aa          # Analyze your command usage
+alias-enable --list      # List enabled packs
+jrun --help             # Enhanced Jenkins runner
+gs                      # git status (from extracted-git pack)
 ```
 
 ## 📦 Installation
 
-### Automatic Installation
+### Prerequisites
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/scherler/smart-alias-manager/main/install.sh | bash
+# Install jq (required for pack management)
+sudo apt-get install jq    # Ubuntu/Debian
+brew install jq            # macOS
 ```
 
-### Manual Installation
+### Automatic Setup
 
-1. Clone the repository:
-```bash
-git clone https://github.com/scherler/smart-alias-manager.git ~/.smart-alias-manager
+1. **Clone repository**:
+   ```bash
+   git clone https://github.com/scherler/smart-alias-manager.git /src/smart-alias-manager
+   ```
+
+2. **Add to shell** (add to `~/.zshrc`):
+   ```bash
+   # Smart Alias Manager - Load alias packs and functions
+   [[ -f /src/smart-alias-manager/src/loader.sh ]] && source /src/smart-alias-manager/src/loader.sh
+   ```
+
+3. **Create config** (automatic on first run):
+   ```bash
+   # Config created at: ~/.config/smart-aliases/config.json
+   ```
+
+4. **Extract your existing aliases**:
+   ```bash
+   python3 /src/smart-alias-manager/src/extract-aliases.py
+   ```
+
+That's it! Just **2 lines in .zshrc** for complete setup.
+
+## 🎯 Core Concepts
+
+### Alias Packs
+
+Organize your aliases into modular JSON packs:
+
+```json
+{
+  "name": "git-essentials",
+  "version": "1.0.0",
+  "description": "Essential Git shortcuts",
+  "aliases": [
+    {
+      "name": "gs",
+      "command": "git status",
+      "description": "Show git status"
+    }
+  ]
+}
 ```
 
-2. Add to your shell configuration (`~/.bashrc`, `~/.zshrc`, etc.):
-```bash
-# Smart Alias Manager
-source ~/.smart-alias-manager/src/alias-manager.sh
+### Configuration
+
+Single config file at `~/.config/smart-aliases/config.json`:
+
+```json
+{
+  "enabled_packs": [
+    "extracted-git",
+    "extracted-maven",
+    "extracted-docker"
+  ],
+  "settings": {
+    "auto_load": true,
+    "show_loading_messages": true
+  }
+}
 ```
 
-3. Reload your shell:
-```bash
-source ~/.bashrc  # or ~/.zshrc
-```
+## 🔧 Command Reference
 
-## 🔧 Core Commands
+### Pack Management
 
-All commands have short 2-letter aliases for maximum efficiency:
+| Command | Description |
+|---------|-------------|
+| `alias-enable --list` | List enabled packs |
+| `alias-enable <pack>` | Enable a pack |
+| `alias-enable --disable <pack>` | Disable a pack |
+| `alias-enable --info <pack>` | Show pack details |
+| `alias-enable --search <query>` | Search for packs |
+| `alias-enable --reload` | Reload all packs |
 
-| Command | Alias | Description |
-|---------|-------|-------------|
-| `alias-help` | `ah` | Show help and list aliases |
-| `alias-new` | `an` | Create new alias interactively |
-| `alias-find` | `af` | Search for aliases by keyword |
-| `alias-which` | `aw` | Show command expansion |
-| `alias-analyze` | `aa` | Analyze command history |
-
-## 📖 Usage Examples
-
-### Creating a New Alias
-
-```bash
-$ an 'docker ps -a'
-📝 Creating alias for: docker ps -a
-
-💡 Suggested aliases (based on command pattern):
-  ✅ dp (available)
-  ✅ dps (available)
-  ❌ da (taken: 'docker attach')
-  📝 Or enter a custom alias name
-
-Choose alias name: dpa
-✅ Alias created successfully!
-
-📌 New alias: dpa = 'docker ps -a'
-```
-
-### Finding Aliases
-
-```bash
-$ af git
-🔍 Searching for aliases containing 'git'...
-
-  📌 g = 'git'
-  📌 gs = 'git status'
-  📌 ga = 'git add'
-  📌 gc = 'git commit'
-  📌 gp = 'git push'
-```
-
-### Analyzing Command Usage
-
-```bash
-$ aa
-📊 Analyzing Command History...
-================================
-
-🔝 Top 20 Most Used Commands:
-  47× git status ⚠️ (no alias)
-  23× docker ps -a ⚠️ (no alias)
-  19× kubectl get pods ✅ (aliased)
-  ...
-
-💡 OPTIMIZATION SUGGESTIONS:
-
-📝 Long commands that could benefit from aliases:
-  12× git commit -m "update"
-     → Suggested alias: gcm
-  8× docker-compose up -d
-     → Suggested alias: dcu
-```
-
-## 🤝 Claude AI Integration
-
-This project includes Claude configuration for enhanced alias suggestions. When using with Claude:
-
-1. Claude can analyze your command patterns
-2. Suggest optimal 2-3 letter aliases
-3. Learn from your workflow to propose custom aliases
-4. Generate category-specific alias sets
-
-### Using with Claude
+### Creating Aliases
 
 ```bash
-# Ask Claude to optimize your aliases
-"Claude, analyze my shell history and suggest optimal aliases"
-
-# Get suggestions for specific workflows
-"Claude, create aliases for my Kubernetes workflow" 
-
-# Learn from patterns
-"Claude, what are my most used git commands without aliases?"
+alias-new <command> [description]   # Create new alias interactively
 ```
 
-## 🎯 Optimization Philosophy
+**Features**:
+- ✅ Smart category detection (git, docker, maven, npm-yarn, etc.)
+- ✅ Intelligent alias name suggestions
+- ✅ Automatic JSON pack integration
+- ✅ Duplicate detection and overwrite protection
 
-### The "Type Less, Do More" Principle
+**Examples**:
+```bash
+# Create git alias
+alias-new "git status -v" "Verbose git status"
+# Suggests: gs, gst, gsv
 
-- **1 letter**: Reserved for most frequent base commands (g=git, d=docker)
-- **2 letters**: Common operations (gs=git status, dp=docker ps)
-- **3 letters**: Specific frequent tasks (gaa=git add --all)
-- **4+ letters**: Complex or dangerous operations
+# Create docker alias
+alias-new "docker ps -a" "List all containers"
+# Suggests: dp, dps, dpa
 
-### Best Practices
+# Create custom alias
+alias-new "kubectl get pods --all-namespaces"
+# Suggests: kgp, kg, kge
+```
 
-1. **Keep it Short**: Aim for 2-3 character aliases
-2. **Be Consistent**: Use patterns (g* for git, d* for docker)
-3. **Document Well**: Add descriptions to complex aliases
-4. **Avoid Conflicts**: Check existing aliases before creating
-5. **Regular Analysis**: Run `aa` weekly to find optimization opportunities
+The new alias is saved to the appropriate JSON pack (`extracted-git.json`, `extracted-docker.json`, etc.) and immediately available in your current session.
+
+### Enhanced jrun
+
+```bash
+jrun                    # Interactive mode
+jrun core-oc            # Run specific product
+jrun 9090 core-cm       # Custom port
+jrun -a core-oc         # Auto-find available port
+jrun -j core-oc         # Java mode (java -jar)
+jrun --help             # Show all options
+```
+
+**Features**:
+- ✅ Port checking (prevents bind exceptions)
+- ✅ Auto-find available port
+- ✅ Maven (`mvn hpi:run`) or Java (`java -jar`) modes
+- ✅ Interactive product selection
+- ✅ Clear status output
+
+## 📖 Documentation
+
+### Getting Started
+- **[Installation & Setup](docs/pack-integration.md)** - Detailed installation guide
+- **[Alias Packs Guide](docs/packs.md)** - Creating and using alias packs
+- **[jrun Usage](docs/jrun-usage.md)** - Enhanced Jenkins runner guide
+
+### Reference
+- **[JSON Pack Schema](docs/alias-pack-schema.md)** - Pack file format specification
+
+### Reports
+- **[Efficiency Report](reports/efficiency-report.md)** - Your current efficiency metrics
+- **[Extraction Report](reports/EXTRACTION-COMPLETE.md)** - Alias extraction results
+- **[Setup Report](reports/SETUP-COMPLETE.md)** - Installation completion summary
+- **[Cleanup Report](reports/CLEANUP-COMPLETE.md)** - Structure cleanup details
+- **[Feature Overview](reports/ALIAS-PACKS-FEATURE.md)** - Complete feature documentation
 
 ## 📁 Project Structure
 
 ```
 smart-alias-manager/
-├── src/
-│   ├── alias-manager.sh    # Core functions
-│   └── alias-analyzer.sh   # Analysis utilities
+├── src/                      # All scripts
+│   ├── loader.sh            # Main entry point
+│   ├── alias-enable.sh      # Pack manager
+│   ├── functions.sh         # Core functions (jrun, etc.)
+│   ├── extract-aliases.py   # Extract aliases to packs
+│   └── install.sh           # Installation script
+├── docs/                     # Documentation
+│   ├── packs.md             # Pack usage guide
+│   ├── jrun-usage.md        # jrun documentation
+│   ├── alias-pack-schema.md # JSON schema
+│   └── pack-integration.md  # Setup guide
+├── reports/                  # Generated reports
+│   ├── efficiency-report.md
+│   ├── EXTRACTION-COMPLETE.md
+│   └── SETUP-COMPLETE.md
+├── packs/
+│   └── templates/           # Example packs
+│       ├── git-essentials.json
+│       ├── docker-essentials.json
+│       └── maven-jenkins.json
 ├── examples/
 │   └── sample-aliases.sh    # Example configurations
-├── templates/
-│   ├── git-aliases.sh       # Git workflow aliases
-│   ├── docker-aliases.sh    # Docker aliases
-│   └── k8s-aliases.sh       # Kubernetes aliases
-├── docs/
-│   └── USAGE.md            # Detailed documentation
-├── install.sh              # Installation script
-└── .claude.json           # Claude AI configuration
+├── LICENSE
+└── README.md                # This file
 ```
 
-## 🚀 Advanced Features
+### User Configuration
 
-### Custom Alias Storage
+```
+~/.config/smart-aliases/
+├── config.json              # Your configuration
+└── packs/
+    ├── local/               # Your custom packs
+    ├── community/           # Downloaded packs
+    └── cache/               # Cached remote packs
+```
+
+## 🚀 Usage Examples
+
+### Enable Extracted Packs
 
 ```bash
-# Set custom alias file location
-export ALIAS_CONFIG_FILE="$HOME/.config/aliases/my-aliases.sh"
+# List available packs
+ls ~/.config/smart-aliases/packs/local/
+
+# Enable a pack
+alias-enable extracted-git
+
+# List enabled packs
+alias-enable --list
+
+# Show pack details
+alias-enable --info extracted-git
 ```
 
-### Batch Alias Creation
+### Create Custom Pack
 
 ```bash
-# Create multiple aliases from history
-aa | grep "no alias" | while read line; do
-  cmd=$(echo $line | sed 's/.*× //' | sed 's/ ⚠️.*//')
-  an "$cmd"
-done
+# Create pack file
+cat > ~/.config/smart-aliases/packs/local/my-aliases.json <<'EOF'
+{
+  "name": "my-aliases",
+  "version": "1.0.0",
+  "description": "My personal shortcuts",
+  "aliases": [
+    {
+      "name": "deploy",
+      "command": "./deploy.sh production",
+      "description": "Deploy to production"
+    }
+  ]
+}
+EOF
+
+# Enable it
+alias-enable my-aliases
 ```
 
-### Export/Import Aliases
+### Load Pack from URL
 
 ```bash
-# Export current aliases
-alias > my-aliases-backup.sh
+# Load from GitHub
+alias-enable https://raw.githubusercontent.com/user/repo/main/pack.json
 
-# Import aliases
-source my-aliases-backup.sh
+# Reload all packs
+alias-enable --reload
 ```
 
-## 🤖 AI-Enhanced Features
-
-The Claude integration provides:
-
-- **Pattern Recognition**: Identifies your command usage patterns
-- **Smart Suggestions**: Context-aware alias recommendations
-- **Workflow Optimization**: Creates cohesive alias sets for specific tasks
-- **Conflict Resolution**: Prevents and resolves alias conflicts
-- **Learning Mode**: Improves suggestions based on your usage
-
-## 📊 Statistics
-
-Track your efficiency gains:
+### Use Enhanced jrun
 
 ```bash
-# Before optimization
-Average keystrokes per command: 28
+# Interactive selection
+jrun
 
-# After optimization with aliases
-Average keystrokes per command: 4
+# With port checking
+jrun core-oc
+# ⚠️  Port 8080 is already in use!
+# 💡 Options:
+#    1. Stop the process using port 8080
+#    2. Try a different port: jrun <port> [product]
+#    3. Auto-find available port: jrun -a 8080 [product]
 
-# Efficiency gain: 85.7%
+# Auto-find available port
+jrun -a core-oc
+# ✅ Found available port: 8081
+# 🚀 Starting Jenkins on port 8081
 ```
+
+## 📊 Efficiency Metrics
+
+**Your Current Stats** (from extraction):
+
+- **104 aliases** organized into 8 packs
+- **6 core functions** (jrun, docker-cleanup, etc.)
+- **~82% keystroke reduction**
+- **~15,540 keystrokes saved per week**
+- **~40 hours saved per year**
+
+See [efficiency report](reports/efficiency-report.md) for details.
+
+## 🎯 Best Practices
+
+1. **Organize by Category**: Create separate packs for git, docker, maven, etc.
+2. **Use Descriptive Names**: Clear pack and alias names
+3. **Document Everything**: Add descriptions to all aliases
+4. **Version Control**: Keep your custom packs in git
+5. **Share with Team**: Host packs on GitHub for team use
+6. **Regular Updates**: Run extraction periodically to update packs
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-**Aliases not persisting across sessions**
-- Ensure you've added `source ~/.smart-alias-manager/src/alias-manager.sh` to your shell config
+**jq not installed**
+```bash
+sudo apt-get install jq  # Ubuntu/Debian
+brew install jq          # macOS
+```
 
-**Command not found errors**
-- Check that functions are exported: `export -f alias-help`
+**Packs not loading**
+```bash
+# Check config
+cat ~/.config/smart-aliases/config.json
 
-**Conflicts with existing aliases**
-- Use `af <name>` to check for conflicts before creating
+# Reload shell
+source ~/.zshrc
+
+# Check for errors
+alias-enable --list
+```
+
+**Aliases not working**
+```bash
+# Verify alias loaded
+type gs
+
+# Reload packs
+alias-enable --reload
+```
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions welcome! Please:
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+### Contributing Packs
+
+Share your alias packs:
+1. Create pack in JSON format
+2. Test thoroughly
+3. Submit PR or share URL
+4. Add to community directory
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- Inspired by the efficiency principles of vim and tmux
-- Built with the power of Claude AI
-- Thanks to all contributors and users
+- Built for maximum efficiency and minimal configuration
+- Inspired by modular package management systems
+- Powered by jq for JSON processing
 
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/scherler/smart-alias-manager/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/scherler/smart-alias-manager/discussions)
-- **Email**: your.email@example.com
+- **Documentation**: See [docs/](docs/) directory
+- **Reports**: See [reports/](reports/) directory
 
 ---
 

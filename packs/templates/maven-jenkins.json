@@ -1,0 +1,86 @@
+{
+  "name": "maven-jenkins",
+  "version": "1.0.0",
+  "author": "Smart Alias Manager",
+  "description": "Maven and Jenkins development shortcuts",
+  "license": "MIT",
+  "tags": ["maven", "jenkins", "java", "build"],
+  "requires": {
+    "zsh": ">=5.0",
+    "commands": ["mvn"]
+  },
+  "aliases": [
+    {
+      "name": "m",
+      "type": "alias",
+      "command": "mvn",
+      "description": "Maven command",
+      "category": "maven",
+      "enabled": true
+    },
+    {
+      "name": "mc",
+      "type": "alias",
+      "command": "mvn clean",
+      "description": "Clean Maven project",
+      "category": "maven",
+      "enabled": true
+    },
+    {
+      "name": "mi",
+      "type": "alias",
+      "command": "mvn install",
+      "description": "Install/build Maven project",
+      "category": "maven",
+      "enabled": true
+    },
+    {
+      "name": "mis",
+      "type": "alias",
+      "command": "mvn install -DskipTests",
+      "description": "Install without tests",
+      "category": "maven",
+      "enabled": true
+    },
+    {
+      "name": "mic",
+      "type": "alias",
+      "command": "mvn clean install",
+      "description": "Clean and install",
+      "category": "maven",
+      "enabled": true
+    },
+    {
+      "name": "mics",
+      "type": "alias",
+      "command": "mvn clean install -DskipTests",
+      "description": "Clean install without tests",
+      "category": "maven",
+      "enabled": true
+    },
+    {
+      "name": "mr",
+      "type": "alias",
+      "command": "mvn hpi:run",
+      "description": "Run Jenkins HPI plugin",
+      "category": "maven",
+      "enabled": true
+    },
+    {
+      "name": "mp",
+      "type": "alias",
+      "command": "mvn versions:update-parent",
+      "description": "Update parent POM version",
+      "category": "maven",
+      "enabled": true
+    }
+  ],
+  "functions": [
+    {
+      "name": "xx",
+      "body": "mvn clean test -Dtest=\"$1\" -Dmaven.surefire.debug",
+      "description": "Run specific Maven test in debug mode",
+      "category": "maven"
+    }
+  ]
+}

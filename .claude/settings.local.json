@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(while read line)",
+      "Bash(do echo \"$line\")",
+      "Bash(echo:*)",
+      "Bash(do echo \"=== $pack ===\")",
+      "Bash(do if ! jq empty \"$pack\")",
+      "Bash(while IFS= read -r alias_json)",
+      "Bash(do echo \"$alias_json\")",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "name": "docker-essentials",
+  "version": "1.0.0",
+  "author": "Smart Alias Manager",
+  "description": "Docker shortcuts and container management utilities",
+  "license": "MIT",
+  "tags": ["docker", "containers", "devops"],
+  "requires": {
+    "zsh": ">=5.0",
+    "commands": ["docker"]
+  },
+  "aliases": [
+    {
+      "name": "d",
+      "type": "alias",
+      "command": "docker",
+      "description": "Docker command",
+      "category": "docker",
+      "enabled": true
+    },
+    {
+      "name": "dps",
+      "type": "alias",
+      "command": "docker ps",
+      "description": "List running containers",
+      "category": "docker",
+      "enabled": true
+    },
+    {
+      "name": "dpsa",
+      "type": "alias",
+      "command": "docker ps -a",
+      "description": "List all containers",
+      "category": "docker",
+      "enabled": true
+    },
+    {
+      "name": "dka",
+      "type": "alias",
+      "command": "docker kill $(docker ps -q)",
+      "description": "Kill all running containers",
+      "category": "docker",
+      "enabled": true
+    },
+    {
+      "name": "dsta",
+      "type": "alias",
+      "command": "docker stop $(docker ps -q)",
+      "description": "Stop all running containers",
+      "category": "docker",
+      "enabled": true
+    },
+    {
+      "name": "dr",
+      "type": "alias",
+      "command": "sudo service docker restart",
+      "description": "Restart Docker service",
+      "category": "docker",
+      "enabled": true
+    },
+    {
+      "name": "dils",
+      "type": "alias",
+      "command": "docker image ls",
+      "description": "List Docker images",
+      "category": "docker",
+      "enabled": true
+    },
+    {
+      "name": "dipru",
+      "type": "alias",
+      "command": "docker image prune -a",
+      "description": "Remove unused images",
+      "category": "docker",
+      "enabled": true
+    }
+  ],
+  "functions": [
+    {
+      "name": "docker-cleanup",
+      "body": "echo \"🧹 Stopping all containers...\"\ndocker stop $(docker ps -q) 2>/dev/null\necho \"🗑️  Removing containers, images, volumes...\"\ndocker system prune -af --volumes\necho \"✅ Docker cleanup complete!\"",
+      "description": "Complete Docker cleanup - stops all containers and prunes system",
+      "category": "docker"
+    }
+  ]
+}

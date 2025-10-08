@@ -149,65 +149,87 @@ alias-find() {
 
 alias-new() {
     if [[ -z "$1" ]]; then
-        echo "Usage: alias-new <command>"
-        echo "Creates a new alias with smart suggestions"
+        echo "Usage: alias-new <command> [description]"
+        echo "Creates a new alias with smart suggestions and saves to JSON pack"
         echo ""
         echo "Examples:"
-        echo "  alias-new 'git status --short'"
-        echo "  alias-new 'docker ps -a'"
+        echo "  alias-new 'git status --short' 'Quick git status'"
+        echo "  alias-new 'docker ps -a' 'List all containers'"
         echo "  alias-new 'kubectl get pods --all-namespaces'"
         return
     fi
-    
+
+    # Check if jq is available
+    if ! command -v jq &> /dev/null; then
+        echo "❌ Error: jq is required for alias pack management"
+        echo "Install: sudo apt-get install jq (or brew install jq on macOS)"
+        return 1
+    fi
+
     local command="$1"
-    local alias_file="${ALIAS_CONFIG_FILE:-$HOME/.aliases}"
-    
+    local description="${2:-}"
+    local packs_dir="${HOME}/.config/smart-aliases/packs/local"
+
+    # Ensure packs directory exists
+    mkdir -p "$packs_dir"
+
     echo "📝 Creating alias for: $command"
     echo ""
-    
+
     # Generate smart suggestions based on command
     local suggestions=()
-    local words=($command)
-    local first_word="${words[0]}"
-    
-    # Smart suggestions based on command type
+    local words=($=command)  # Use $= to force word splitting
+    local first_word="${words[1]}"  # zsh arrays start at 1
+
+    # Determine category based on command
+    local category="misc"
     case "$first_word" in
         git)
-            local git_cmd="${words[1]}"
+            category="git"
+            local git_cmd="${words[2]}"
             suggestions+=("g${git_cmd:0:1}")
             suggestions+=("g${git_cmd:0:2}")
             if [[ "${#words[@]}" -gt 2 ]]; then
-                suggestions+=("g${git_cmd:0:1}${words[2]:0:1}")
+                suggestions+=("g${git_cmd:0:1}${words[3]:0:1}")
             fi
             ;;
         docker)
-            if [[ "${words[1]}" == "compose" ]]; then
-                suggestions+=("dc${words[2]:0:1}")
-                suggestions+=("dc${words[2]:0:2}")
+            category="docker"
+            if [[ "${words[2]}" == "compose" ]]; then
+                suggestions+=("dc${words[3]:0:1}")
+                suggestions+=("dc${words[3]:0:2}")
             else
-                suggestions+=("d${words[1]:0:1}")
-                suggestions+=("d${words[1]:0:2}")
+                suggestions+=("d${words[2]:0:1}")
+                suggestions+=("d${words[2]:0:2}")
             fi
             ;;
         kubectl|k)
-            suggestions+=("k${words[1]:0:1}")
-            suggestions+=("k${words[1]:0:2}")
+            category="misc"
+            suggestions+=("k${words[2]:0:1}")
+            suggestions+=("k${words[2]:0:2}")
             if [[ "${#words[@]}" -gt 2 ]]; then
-                suggestions+=("k${words[1]:0:1}${words[2]:0:1}")
+                suggestions+=("k${words[2]:0:1}${words[3]:0:1}")
             fi
             ;;
         npm)
-            suggestions+=("n${words[1]:0:1}")
-            suggestions+=("n${words[1]:0:2}")
+            category="npm-yarn"
+            suggestions+=("n${words[2]:0:1}")
+            suggestions+=("n${words[2]:0:2}")
             ;;
         yarn)
-            suggestions+=("y${words[1]:0:1}")
-            suggestions+=("y${words[1]:0:2}")
+            category="npm-yarn"
+            suggestions+=("y${words[2]:0:1}")
+            suggestions+=("y${words[2]:0:2}")
+            ;;
+        mvn|maven)
+            category="maven"
+            suggestions+=("m${words[2]:0:1}")
+            suggestions+=("m${words[2]:0:2}")
             ;;
         *)
             # Generic suggestions using initials
             local initials=""
-            for word in "${words[@]:0:3}"; do
+            for word in "${words[@]:1:3}"; do
                 initials+="${word:0:1}"
             done
             suggestions+=("$initials")
@@ -215,7 +237,7 @@ alias-new() {
             suggestions+=("${first_word:0:3}")
             ;;
     esac
-    
+
     # Check existing aliases and show suggestions
     echo "💡 Suggested aliases (based on command pattern):"
     local valid_suggestions=()
@@ -230,19 +252,19 @@ alias-new() {
             fi
         fi
     done
-    
+
     echo "  📝 Or enter a custom alias name"
     echo ""
-    
+
     # Get user choice
     echo -n "Choose alias name (or press Enter to skip): "
     read chosen_alias
-    
+
     if [[ -z "$chosen_alias" ]]; then
         echo "❌ Alias creation cancelled"
         return
     fi
-    
+
     # Check if alias already exists
     local existing=$(alias "$chosen_alias" 2>/dev/null)
     if [[ -n "$existing" ]]; then
@@ -254,20 +276,69 @@ alias-new() {
             return
         fi
     fi
-    
+
+    # Get description if not provided
+    if [[ -z "$description" ]]; then
+        echo -n "Description (optional): "
+        read description
+        [[ -z "$description" ]] && description="$chosen_alias command"
+    fi
+
+    # Determine pack file
+    local pack_file="$packs_dir/extracted-${category}.json"
+
+    # Create pack if it doesn't exist
+    if [[ ! -f "$pack_file" ]]; then
+        echo "📦 Creating new pack: extracted-${category}"
+        cat > "$pack_file" <<EOF
+{
+  "name": "extracted-${category}",
+  "version": "1.0.0",
+  "author": "User-created aliases",
+  "description": "${category^} aliases",
+  "license": "MIT",
+  "tags": ["${category}", "extracted", "personal"],
+  "requires": {
+    "zsh": ">=5.0"
+  },
+  "aliases": []
+}
+EOF
+    fi
+
+    # Escape command for JSON
+    local escaped_command=$(echo "$command" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+
+    # Check if alias already exists in pack
+    local existing_in_pack=$(jq -r ".aliases[] | select(.name == \"$chosen_alias\") | .name" "$pack_file" 2>/dev/null)
+
+    if [[ -n "$existing_in_pack" ]]; then
+        # Update existing alias
+        jq ".aliases = [.aliases[] | if .name == \"$chosen_alias\" then .command = \"$escaped_command\" | .description = \"$description\" else . end]" "$pack_file" > "${pack_file}.tmp" && mv "${pack_file}.tmp" "$pack_file"
+        echo "♻️  Updated existing alias in pack"
+    else
+        # Add new alias to pack
+        jq ".aliases += [{\"name\": \"$chosen_alias\", \"type\": \"alias\", \"command\": \"$escaped_command\", \"description\": \"$description\", \"category\": \"$category\", \"enabled\": true}]" "$pack_file" > "${pack_file}.tmp" && mv "${pack_file}.tmp" "$pack_file"
+        echo "➕ Added new alias to pack"
+    fi
+
+    # Validate JSON
+    if ! jq empty "$pack_file" 2>/dev/null; then
+        echo "❌ Error: Invalid JSON generated"
+        return 1
+    fi
+
     # Set the alias in current session
     alias "$chosen_alias"="$command"
-    
-    # Save to alias file
-    echo "alias $chosen_alias='$command'" >> "$alias_file"
-    
+
     echo "✅ Alias created successfully!"
     echo ""
     echo "📌 New alias: $chosen_alias = '$command'"
+    echo "📦 Saved to: $pack_file"
     echo ""
     echo "💡 The alias is now active in your current session"
-    echo "💡 To make it permanent, it's been added to: $alias_file"
-    echo "💡 Make sure to source this file in your shell config"
+    echo "💡 To persist across sessions, ensure pack is enabled:"
+    echo "   alias-enable extracted-${category}"
 }
 
 alias-analyze() {

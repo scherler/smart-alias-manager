@@ -1,0 +1,168 @@
+{
+  "name": "git-essentials",
+  "version": "1.0.0",
+  "author": "Smart Alias Manager",
+  "description": "Essential Git aliases for maximum productivity - 2-3 letter shortcuts",
+  "license": "MIT",
+  "repository": "https://github.com/scherler/smart-alias-manager",
+  "tags": ["git", "vcs", "productivity", "essentials"],
+  "requires": {
+    "zsh": ">=5.0",
+    "commands": ["git"]
+  },
+  "aliases": [
+    {
+      "name": "g",
+      "type": "alias",
+      "command": "git",
+      "description": "Base git command",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gs",
+      "type": "alias",
+      "command": "git status",
+      "description": "Show working tree status",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "ga",
+      "type": "alias",
+      "command": "git add",
+      "description": "Add files to staging area",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gaa",
+      "type": "alias",
+      "command": "git add --all",
+      "description": "Add all modified files to staging",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gc",
+      "type": "alias",
+      "command": "git commit",
+      "description": "Commit staged changes",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gcm",
+      "type": "alias",
+      "command": "git commit -m",
+      "description": "Commit with inline message",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gco",
+      "type": "alias",
+      "command": "git checkout",
+      "description": "Checkout branch or restore files",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gp",
+      "type": "alias",
+      "command": "git push",
+      "description": "Push commits to remote",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gpl",
+      "type": "alias",
+      "command": "git pull",
+      "description": "Pull changes from remote",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gb",
+      "type": "alias",
+      "command": "git branch",
+      "description": "List, create, or delete branches",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gd",
+      "type": "alias",
+      "command": "git diff",
+      "description": "Show unstaged changes",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gds",
+      "type": "alias",
+      "command": "git diff --staged",
+      "description": "Show staged changes",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gf",
+      "type": "alias",
+      "command": "git fetch",
+      "description": "Download objects from remote",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gfa",
+      "type": "alias",
+      "command": "git fetch --all",
+      "description": "Fetch all remotes",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gl",
+      "type": "alias",
+      "command": "git log --oneline",
+      "description": "Show commit history (compact)",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gmu",
+      "type": "alias",
+      "command": "git merge upstream/master",
+      "description": "Merge upstream master branch",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "p",
+      "type": "alias",
+      "command": "git push",
+      "description": "Quick push to remote",
+      "category": "git",
+      "enabled": true,
+      "conflicts": ["python"]
+    },
+    {
+      "name": "s",
+      "type": "alias",
+      "command": "git status",
+      "description": "Quick status check",
+      "category": "git",
+      "enabled": true
+    },
+    {
+      "name": "gu",
+      "type": "alias",
+      "command": "git pull upstream",
+      "description": "Pull from upstream",
+      "category": "git",
+      "enabled": true
+    }
+  ]
+}
