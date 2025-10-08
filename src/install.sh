@@ -58,9 +58,43 @@ print_banner() {
     echo -e "${BLUE}"
     echo "╔════════════════════════════════════════╗"
     echo "║      Smart Alias Manager v1.0.0       ║"
-    echo "║   Type less, do more with aliases!    ║"
+    echo "║   JSON-based Pack System Edition      ║"
     echo "╚════════════════════════════════════════╝"
     echo -e "${NC}"
+}
+
+# Check dependencies
+check_dependencies() {
+    echo -e "${GREEN}🔍 Checking dependencies...${NC}"
+
+    local missing_deps=()
+
+    # Check for jq (required for JSON pack management)
+    if ! command -v jq &> /dev/null; then
+        missing_deps+=("jq")
+        echo -e "${YELLOW}⚠️  jq is required for JSON pack management${NC}"
+    else
+        echo "✅ jq found"
+    fi
+
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo ""
+        echo -e "${RED}❌ Missing required dependencies:${NC}"
+        for dep in "${missing_deps[@]}"; do
+            echo "   - $dep"
+        done
+        echo ""
+        echo "Please install missing dependencies:"
+        echo -e "${YELLOW}  Ubuntu/Debian: sudo apt-get install jq${NC}"
+        echo -e "${YELLOW}  macOS: brew install jq${NC}"
+        echo ""
+        echo -n "Continue anyway? (y/N): "
+        read -r response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            echo "Installation cancelled"
+            exit 1
+        fi
+    fi
 }
 
 # Check if already installed
@@ -81,21 +115,25 @@ check_existing() {
 # Clone or copy repository
 install_files() {
     echo -e "${GREEN}📦 Installing Smart Alias Manager...${NC}"
-    
+
     # Check if we're in the repo directory
-    if [ -f "src/alias-manager.sh" ]; then
+    if [ -f "src/loader.sh" ]; then
         # We're in the repo, copy files
         echo "Installing from local repository..."
         mkdir -p "$INSTALL_DIR"
-        cp -r src examples templates docs README.md .claude.json "$INSTALL_DIR/" 2>/dev/null || true
+        cp -r src docs reports packs README.md .gitignore "$INSTALL_DIR/" 2>/dev/null || true
+        cp -r examples "$INSTALL_DIR/" 2>/dev/null || true
     else
-        # Clone from GitHub (update with your actual repo URL)
+        # Clone from GitHub
         echo "Cloning from GitHub..."
-        git clone https://github.com/yourusername/smart-alias-manager.git "$INSTALL_DIR"
+        git clone https://github.com/scherler/smart-alias-manager.git "$INSTALL_DIR"
     fi
-    
+
     # Make scripts executable
-    chmod +x "$INSTALL_DIR/src/alias-manager.sh" 2>/dev/null || true
+    chmod +x "$INSTALL_DIR/src/"*.sh 2>/dev/null || true
+    chmod +x "$INSTALL_DIR/src/extract-aliases.py" 2>/dev/null || true
+
+    echo "✅ Files installed to $INSTALL_DIR"
 }
 
 # Setup shell configuration
@@ -112,33 +150,28 @@ setup_shell_config() {
     if grep -q "Smart Alias Manager" "$SHELL_CONFIG" 2>/dev/null; then
         echo "Configuration already exists in $SHELL_CONFIG"
         # Remove old configuration to replace with new one
-        sed -i.tmp '/# ============================================/,/export ALIAS_CONFIG_FILE=/d' "$SHELL_CONFIG"
+        # Remove lines from "# ============================================" (Smart Alias Manager section)
+        # to the end of the loader.sh line or ALIAS_CONFIG_FILE export
+        sed -i.tmp '/# ============================================/,/source.*loader\.sh\|export ALIAS_CONFIG_FILE=/d' "$SHELL_CONFIG"
         rm -f "${SHELL_CONFIG}.tmp"
     fi
     
     # Add configuration to shell config with proper zsh/bash compatibility
     if [[ "$SHELL_TYPE" == "zsh" ]]; then
-        cat >> "$SHELL_CONFIG" << 'EOF'
+        cat >> "$SHELL_CONFIG" << EOF
 
 # ============================================
 # Smart Alias Manager
 # ============================================
-# Powerful alias management system with AI-enhanced suggestions
+# Powerful alias management system with JSON-based packs
 
 # Source custom aliases first (if exists)
-if [[ -f "/src/thor/zsh/plugins/cb-alias/alias-optimized.sh" ]]; then
-    source "/src/thor/zsh/plugins/cb-alias/alias-optimized.sh"
+if [[ -f "/src/thor/zsh/plugins/cb-alias/alias.sh" ]]; then
+    source "/src/thor/zsh/plugins/cb-alias/alias.sh"
 fi
 
-EOF
-        cat >> "$SHELL_CONFIG" << EOF
-# Source Smart Alias Manager
-if [[ -f "$INSTALL_DIR/src/alias-manager.sh" ]]; then
-    source "$INSTALL_DIR/src/alias-manager.sh"
-fi
-
-# Custom alias file location (optional)
-export ALIAS_CONFIG_FILE="\${HOME}/.config/smart-aliases/aliases.sh"
+# Smart Alias Manager - Load alias packs and functions
+[[ -f $INSTALL_DIR/src/loader.sh ]] && source $INSTALL_DIR/src/loader.sh
 EOF
     else
         cat >> "$SHELL_CONFIG" << EOF
@@ -146,48 +179,76 @@ EOF
 # ============================================
 # Smart Alias Manager
 # ============================================
-# Powerful alias management system with AI-enhanced suggestions
-if [ -f "$INSTALL_DIR/src/alias-manager.sh" ]; then
-    source "$INSTALL_DIR/src/alias-manager.sh"
+# Powerful alias management system with JSON-based packs
+if [ -f "$INSTALL_DIR/src/loader.sh" ]; then
+    source "$INSTALL_DIR/src/loader.sh"
 fi
-
-# Custom alias file location (optional)
-export ALIAS_CONFIG_FILE="\${HOME}/.config/smart-aliases/aliases.sh"
 EOF
     fi
     echo "Added configuration to $SHELL_CONFIG"
-    
+
     # Add note about custom aliases
     if [[ "$SHELL_TYPE" == "zsh" ]]; then
         echo -e "${BLUE}ℹ️  Configured to source your custom aliases from:${NC}"
-        echo "   /src/thor/zsh/plugins/cb-alias/alias-optimized.sh"
+        echo "   /src/thor/zsh/plugins/cb-alias/alias.sh"
+        echo -e "${BLUE}ℹ️  Run extract-aliases.py to convert them to JSON packs${NC}"
     fi
 }
 
-# Create alias storage directory
+# Create alias storage directory and config
 setup_alias_storage() {
-    echo -e "${GREEN}📁 Setting up alias storage...${NC}"
-    
+    echo -e "${GREEN}📁 Setting up alias pack system...${NC}"
+
     ALIAS_DIR="${HOME}/.config/smart-aliases"
-    mkdir -p "$ALIAS_DIR"
-    
-    # Create initial aliases file if it doesn't exist
-    if [ ! -f "$ALIAS_DIR/aliases.sh" ]; then
-        cat > "$ALIAS_DIR/aliases.sh" << 'EOF'
-# Smart Alias Manager - User Aliases
-# This file contains your custom aliases
-# Created on: $(date)
+    PACKS_DIR="${ALIAS_DIR}/packs"
 
-# Example aliases (uncomment to use):
-# alias ll='ls -la'
-# alias ..='cd ..'
-# alias ...='cd ../..'
+    # Create directory structure
+    mkdir -p "${PACKS_DIR}/local"
+    mkdir -p "${PACKS_DIR}/community"
+    mkdir -p "${PACKS_DIR}/cache"
 
-# Your aliases will be added below by the alias-new command:
-
+    # Create config.json if it doesn't exist
+    if [ ! -f "${ALIAS_DIR}/config.json" ]; then
+        cat > "${ALIAS_DIR}/config.json" << 'EOF'
+{
+  "version": "1.0.0",
+  "user": {
+    "name": "user",
+    "shell": "zsh"
+  },
+  "paths": {
+    "packs_dir": "${HOME}/.config/smart-aliases/packs",
+    "local_packs": "${HOME}/.config/smart-aliases/packs/local",
+    "community_packs": "${HOME}/.config/smart-aliases/packs/community",
+    "cache_dir": "${HOME}/.config/smart-aliases/packs/cache"
+  },
+  "enabled_packs": [],
+  "settings": {
+    "auto_load": true,
+    "show_loading_messages": true,
+    "check_requirements": true,
+    "allow_url_packs": true
+  }
+}
 EOF
-        echo "Created alias storage at $ALIAS_DIR/aliases.sh"
+        echo "✅ Created config.json"
     fi
+
+    # Create .gitignore files to protect user data
+    if [ ! -f "${PACKS_DIR}/local/.gitignore" ]; then
+        echo "# Ignore all extracted and user-created packs" > "${PACKS_DIR}/local/.gitignore"
+        echo "extracted-*.json" >> "${PACKS_DIR}/local/.gitignore"
+        echo "*.json" >> "${PACKS_DIR}/local/.gitignore"
+        echo "✅ Created .gitignore for local packs"
+    fi
+
+    if [ ! -f "${PACKS_DIR}/cache/.gitignore" ]; then
+        echo "# Ignore all cached packs" > "${PACKS_DIR}/cache/.gitignore"
+        echo "*.json" >> "${PACKS_DIR}/cache/.gitignore"
+        echo "✅ Created .gitignore for cached packs"
+    fi
+
+    echo "✅ Pack system directories created at ${PACKS_DIR}"
 }
 
 # Create example aliases based on detected tools
@@ -247,49 +308,66 @@ EOF
 # Test installation
 test_installation() {
     echo -e "${GREEN}🧪 Testing installation...${NC}"
-    
-    # For zsh, we need to test differently
+
+    # Check if config.json was created
+    if [[ -f "${HOME}/.config/smart-aliases/config.json" ]]; then
+        echo "✅ config.json created"
+    else
+        echo "❌ config.json not found"
+        return 1
+    fi
+
+    # Check pack directories
+    if [[ -d "${HOME}/.config/smart-aliases/packs/local" ]]; then
+        echo "✅ Pack directories created"
+    else
+        echo "❌ Pack directories not found"
+        return 1
+    fi
+
+    # For zsh, test in subshell
     if [[ "$SHELL_TYPE" == "zsh" ]]; then
-        # Test in a zsh subshell
-        zsh -c "source '$INSTALL_DIR/src/alias-manager.sh' && type alias-help" &> /dev/null
-        if [[ $? -eq 0 ]]; then
-            echo "✅ alias-help function loaded"
+        # Test loader.sh
+        if zsh -c "source '$INSTALL_DIR/src/loader.sh' 2>/dev/null && type alias-enable" &> /dev/null; then
+            echo "✅ alias-enable function loaded"
         else
-            echo "⚠️  alias-help function not found (will be available after reloading shell)"
+            echo "⚠️  alias-enable function not found (will be available after reloading shell)"
         fi
-        
-        zsh -c "source '$INSTALL_DIR/src/alias-manager.sh' && type ah" &> /dev/null
-        if [[ $? -eq 0 ]]; then
-            echo "✅ Short aliases (ah) loaded"
+
+        # Test alias-new
+        if zsh -c "source '$INSTALL_DIR/src/loader.sh' 2>/dev/null && type alias-new" &> /dev/null; then
+            echo "✅ alias-new function loaded"
         else
-            echo "⚠️  Short aliases not found (will be available after reloading shell)"
+            echo "⚠️  alias-new function not found (will be available after reloading shell)"
         fi
-        
+
         # Check if custom alias file exists
-        if [[ -f "/src/thor/zsh/plugins/cb-alias/alias-optimized.sh" ]]; then
+        if [[ -f "/src/thor/zsh/plugins/cb-alias/alias.sh" ]]; then
             echo "✅ Custom alias file found"
         else
-            echo "⚠️  Custom alias file not found at /src/thor/zsh/plugins/cb-alias/alias-optimized.sh"
+            echo "⚠️  Custom alias file not found at /src/thor/zsh/plugins/cb-alias/alias.sh"
         fi
     else
-        # Original bash test
-        source "$INSTALL_DIR/src/alias-manager.sh"
-        
-        if type alias-help &> /dev/null; then
-            echo "✅ alias-help function loaded"
+        # Bash test
+        if command -v jq &> /dev/null; then
+            source "$INSTALL_DIR/src/loader.sh" 2>/dev/null
+
+            if type alias-enable &> /dev/null; then
+                echo "✅ alias-enable function loaded"
+            else
+                echo "⚠️  alias-enable function not found"
+            fi
+
+            if type alias-new &> /dev/null; then
+                echo "✅ alias-new function loaded"
+            else
+                echo "⚠️  alias-new function not found"
+            fi
         else
-            echo "❌ alias-help function not found"
-            return 1
-        fi
-        
-        if type ah &> /dev/null; then
-            echo "✅ Short aliases (ah) loaded"
-        else
-            echo "❌ Short aliases not found"
-            return 1
+            echo "⚠️  Skipping function tests (jq not installed)"
         fi
     fi
-    
+
     echo -e "${GREEN}✅ Installation test completed!${NC}"
 }
 
@@ -313,23 +391,27 @@ print_success() {
         echo -e "   ${YELLOW}source $SHELL_CONFIG${NC}"
     fi
     echo ""
-    echo "2. Try these commands:"
-    echo -e "   ${YELLOW}ah${NC}              # Show help and list aliases"
-    echo -e "   ${YELLOW}an 'git status'${NC} # Create a new alias"
-    echo -e "   ${YELLOW}af git${NC}          # Find git-related aliases"
-    echo -e "   ${YELLOW}aa${NC}              # Analyze your command history"
-    
+    echo "2. Extract your existing aliases to JSON packs:"
+    echo -e "   ${YELLOW}python3 $INSTALL_DIR/src/extract-aliases.py${NC}"
+    echo ""
+    echo "3. Try these commands:"
+    echo -e "   ${YELLOW}alias-enable --list${NC}         # List enabled packs"
+    echo -e "   ${YELLOW}alias-enable extracted-git${NC}  # Enable a pack"
+    echo -e "   ${YELLOW}alias-new 'git status'${NC}      # Create a new alias"
+    echo -e "   ${YELLOW}alias-enable --info git${NC}     # Show pack details"
+
     if [[ "$SHELL_TYPE" == "zsh" ]]; then
         echo ""
-        echo "📦 Your custom aliases are integrated from:"
-        echo -e "   ${YELLOW}/src/thor/zsh/plugins/cb-alias/alias-optimized.sh${NC}"
+        echo "📦 Your custom aliases can be extracted from:"
+        echo -e "   ${YELLOW}/src/thor/zsh/plugins/cb-alias/alias.sh${NC}"
     fi
     echo ""
-    echo "3. Check the examples:"
-    echo -e "   ${YELLOW}cat $INSTALL_DIR/examples/detected-aliases.sh${NC}"
+    echo "4. Check the examples and templates:"
+    echo -e "   ${YELLOW}ls $INSTALL_DIR/packs/templates/${NC}"
     echo ""
-    echo "4. Read the documentation:"
+    echo "5. Read the documentation:"
     echo -e "   ${YELLOW}cat $INSTALL_DIR/README.md${NC}"
+    echo -e "   ${YELLOW}cat $INSTALL_DIR/docs/packs.md${NC}"
     echo ""
     echo -e "${GREEN}Type less, do more! 🚀${NC}"
 }
@@ -338,17 +420,18 @@ print_success() {
 main() {
     print_banner
     detect_shell
-    
+
     echo "Detected shell: $SHELL_TYPE"
     echo "Configuration file: $SHELL_CONFIG"
     echo ""
-    
+
+    check_dependencies
     check_existing
     install_files
     setup_shell_config
     setup_alias_storage
     create_examples
-    
+
     if test_installation; then
         print_success
     else
