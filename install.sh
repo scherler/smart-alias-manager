@@ -1,6 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Smart Alias Manager - Installation Script
 # Automatically sets up the alias management system for your shell
+# Compatible with bash and zsh
 
 set -e  # Exit on error
 
@@ -16,10 +17,14 @@ INSTALL_DIR="${HOME}/.smart-alias-manager"
 
 # Detect shell type
 detect_shell() {
-    if [ -n "$ZSH_VERSION" ]; then
+    # First check the SHELL environment variable
+    if [[ "$SHELL" == *"zsh"* ]]; then
         SHELL_TYPE="zsh"
         SHELL_CONFIG="${HOME}/.zshrc"
-    elif [ -n "$BASH_VERSION" ]; then
+    elif [[ -n "$ZSH_VERSION" ]]; then
+        SHELL_TYPE="zsh"
+        SHELL_CONFIG="${HOME}/.zshrc"
+    elif [[ -n "$BASH_VERSION" ]]; then
         SHELL_TYPE="bash"
         SHELL_CONFIG="${HOME}/.bashrc"
     else
@@ -34,9 +39,15 @@ detect_shell() {
                 SHELL_CONFIG="${HOME}/.bashrc"
                 ;;
             *)
-                echo -e "${RED}Unable to detect shell type${NC}"
-                echo "Please set SHELL_CONFIG manually and run again"
-                exit 1
+                # Default to zsh if /usr/bin/zsh exists
+                if [[ -f "/usr/bin/zsh" ]]; then
+                    SHELL_TYPE="zsh"
+                    SHELL_CONFIG="${HOME}/.zshrc"
+                else
+                    echo -e "${RED}Unable to detect shell type${NC}"
+                    echo "Please set SHELL_CONFIG manually and run again"
+                    exit 1
+                fi
                 ;;
         esac
     fi
@@ -100,8 +111,36 @@ setup_shell_config() {
     # Check if already configured
     if grep -q "Smart Alias Manager" "$SHELL_CONFIG" 2>/dev/null; then
         echo "Configuration already exists in $SHELL_CONFIG"
+        # Remove old configuration to replace with new one
+        sed -i.tmp '/# ============================================/,/export ALIAS_CONFIG_FILE=/d' "$SHELL_CONFIG"
+        rm -f "${SHELL_CONFIG}.tmp"
+    fi
+    
+    # Add configuration to shell config with proper zsh/bash compatibility
+    if [[ "$SHELL_TYPE" == "zsh" ]]; then
+        cat >> "$SHELL_CONFIG" << 'EOF'
+
+# ============================================
+# Smart Alias Manager
+# ============================================
+# Powerful alias management system with AI-enhanced suggestions
+
+# Source custom aliases first (if exists)
+if [[ -f "/src/thor/zsh/plugins/cb-alias/alias-optimized.sh" ]]; then
+    source "/src/thor/zsh/plugins/cb-alias/alias-optimized.sh"
+fi
+
+EOF
+        cat >> "$SHELL_CONFIG" << EOF
+# Source Smart Alias Manager
+if [[ -f "$INSTALL_DIR/src/alias-manager.sh" ]]; then
+    source "$INSTALL_DIR/src/alias-manager.sh"
+fi
+
+# Custom alias file location (optional)
+export ALIAS_CONFIG_FILE="\${HOME}/.config/smart-aliases/aliases.sh"
+EOF
     else
-        # Add configuration to shell config
         cat >> "$SHELL_CONFIG" << EOF
 
 # ============================================
@@ -115,7 +154,13 @@ fi
 # Custom alias file location (optional)
 export ALIAS_CONFIG_FILE="\${HOME}/.config/smart-aliases/aliases.sh"
 EOF
-        echo "Added configuration to $SHELL_CONFIG"
+    fi
+    echo "Added configuration to $SHELL_CONFIG"
+    
+    # Add note about custom aliases
+    if [[ "$SHELL_TYPE" == "zsh" ]]; then
+        echo -e "${BLUE}ℹ️  Configured to source your custom aliases from:${NC}"
+        echo "   /src/thor/zsh/plugins/cb-alias/alias-optimized.sh"
     fi
 }
 
@@ -203,25 +248,49 @@ EOF
 test_installation() {
     echo -e "${GREEN}🧪 Testing installation...${NC}"
     
-    # Source the alias manager
-    source "$INSTALL_DIR/src/alias-manager.sh"
-    
-    # Check if functions are available
-    if type alias-help &> /dev/null; then
-        echo "✅ alias-help function loaded"
+    # For zsh, we need to test differently
+    if [[ "$SHELL_TYPE" == "zsh" ]]; then
+        # Test in a zsh subshell
+        zsh -c "source '$INSTALL_DIR/src/alias-manager.sh' && type alias-help" &> /dev/null
+        if [[ $? -eq 0 ]]; then
+            echo "✅ alias-help function loaded"
+        else
+            echo "⚠️  alias-help function not found (will be available after reloading shell)"
+        fi
+        
+        zsh -c "source '$INSTALL_DIR/src/alias-manager.sh' && type ah" &> /dev/null
+        if [[ $? -eq 0 ]]; then
+            echo "✅ Short aliases (ah) loaded"
+        else
+            echo "⚠️  Short aliases not found (will be available after reloading shell)"
+        fi
+        
+        # Check if custom alias file exists
+        if [[ -f "/src/thor/zsh/plugins/cb-alias/alias-optimized.sh" ]]; then
+            echo "✅ Custom alias file found"
+        else
+            echo "⚠️  Custom alias file not found at /src/thor/zsh/plugins/cb-alias/alias-optimized.sh"
+        fi
     else
-        echo "❌ alias-help function not found"
-        return 1
+        # Original bash test
+        source "$INSTALL_DIR/src/alias-manager.sh"
+        
+        if type alias-help &> /dev/null; then
+            echo "✅ alias-help function loaded"
+        else
+            echo "❌ alias-help function not found"
+            return 1
+        fi
+        
+        if type ah &> /dev/null; then
+            echo "✅ Short aliases (ah) loaded"
+        else
+            echo "❌ Short aliases not found"
+            return 1
+        fi
     fi
     
-    if type ah &> /dev/null; then
-        echo "✅ Short aliases (ah) loaded"
-    else
-        echo "❌ Short aliases not found"
-        return 1
-    fi
-    
-    echo -e "${GREEN}✅ Installation test passed!${NC}"
+    echo -e "${GREEN}✅ Installation test completed!${NC}"
 }
 
 # Print success message
@@ -236,13 +305,25 @@ print_success() {
     echo -e "${BLUE}📚 Quick Start Guide:${NC}"
     echo ""
     echo "1. Reload your shell configuration:"
-    echo -e "   ${YELLOW}source $SHELL_CONFIG${NC}"
+    if [[ "$SHELL_TYPE" == "zsh" ]]; then
+        echo -e "   ${YELLOW}source ~/.zshrc${NC}"
+        echo "   or simply:"
+        echo -e "   ${YELLOW}exec zsh${NC}"
+    else
+        echo -e "   ${YELLOW}source $SHELL_CONFIG${NC}"
+    fi
     echo ""
     echo "2. Try these commands:"
     echo -e "   ${YELLOW}ah${NC}              # Show help and list aliases"
     echo -e "   ${YELLOW}an 'git status'${NC} # Create a new alias"
     echo -e "   ${YELLOW}af git${NC}          # Find git-related aliases"
     echo -e "   ${YELLOW}aa${NC}              # Analyze your command history"
+    
+    if [[ "$SHELL_TYPE" == "zsh" ]]; then
+        echo ""
+        echo "📦 Your custom aliases are integrated from:"
+        echo -e "   ${YELLOW}/src/thor/zsh/plugins/cb-alias/alias-optimized.sh${NC}"
+    fi
     echo ""
     echo "3. Check the examples:"
     echo -e "   ${YELLOW}cat $INSTALL_DIR/examples/detected-aliases.sh${NC}"

@@ -329,8 +329,11 @@ alias an='alias-new'
 alias aa='alias-analyze'
 
 # Export functions so they're available in subshells
-export -f alias-help
-export -f alias-which
-export -f alias-find
-export -f alias-new
-export -f alias-analyze
+# Note: export -f is bash-specific, zsh doesn't need this
+if [[ -n "$BASH_VERSION" ]]; then
+    export -f alias-help
+    export -f alias-which
+    export -f alias-find
+    export -f alias-new
+    export -f alias-analyze
+fi
