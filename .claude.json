@@ -1,0 +1,132 @@
+{
+  "name": "Smart Alias Manager",
+  "version": "1.0.0",
+  "description": "AI-enhanced shell alias management system for maximum productivity",
+  "capabilities": {
+    "alias_optimization": {
+      "description": "Analyze command history and suggest optimal aliases",
+      "features": [
+        "Pattern recognition in command usage",
+        "Smart 2-3 letter alias suggestions",
+        "Conflict detection and resolution",
+        "Category-based organization"
+      ]
+    },
+    "command_analysis": {
+      "description": "Deep analysis of shell command patterns",
+      "features": [
+        "Frequency analysis",
+        "Command length optimization",
+        "Workflow pattern detection",
+        "Efficiency metrics calculation"
+      ]
+    },
+    "interactive_creation": {
+      "description": "Intelligent alias creation with AI assistance",
+      "features": [
+        "Context-aware naming suggestions",
+        "Automatic categorization",
+        "Duplicate prevention",
+        "Best practice enforcement"
+      ]
+    }
+  },
+  "optimization_rules": {
+    "naming_conventions": {
+      "1_letter": "Most frequent base commands (g=git, d=docker, k=kubectl)",
+      "2_letters": "Common operations (gs=git status, dp=docker ps)",
+      "3_letters": "Specific frequent tasks (gaa=git add --all)",
+      "4_plus_letters": "Complex or dangerous operations"
+    },
+    "pattern_prefixes": {
+      "git": "g",
+      "docker": "d",
+      "kubectl": "k",
+      "npm": "n",
+      "yarn": "y",
+      "maven": "m",
+      "python": "p",
+      "aws": "a"
+    },
+    "efficiency_targets": {
+      "keystroke_reduction": "80%",
+      "command_frequency_threshold": 3,
+      "max_alias_length": 4
+    }
+  },
+  "prompts": {
+    "analyze_history": "Analyze the user's command history and identify the top 20 most frequently used commands. For each command without an alias, suggest an optimal 2-3 letter alias following the naming conventions.",
+    "optimize_workflow": "Based on the user's command patterns, create a cohesive set of aliases for their specific workflow. Group by tool/category and ensure consistency.",
+    "suggest_alias": "For the command '{command}', suggest 3 optimal alias names following these rules: 1) 2-3 letters, 2) category prefix if applicable, 3) mnemonic if possible",
+    "detect_patterns": "Identify repetitive command sequences and suggest composite aliases or functions to streamline the workflow.",
+    "efficiency_report": "Calculate the efficiency gain from using aliases: compare total keystrokes before and after optimization."
+  },
+  "learning_patterns": {
+    "git_workflows": [
+      {
+        "pattern": "git add . && git commit -m",
+        "suggestion": "gacm",
+        "description": "Stage all and commit with message"
+      },
+      {
+        "pattern": "git fetch && git pull",
+        "suggestion": "gfp",
+        "description": "Fetch and pull latest changes"
+      }
+    ],
+    "docker_workflows": [
+      {
+        "pattern": "docker-compose up -d",
+        "suggestion": "dcu",
+        "description": "Start containers in detached mode"
+      },
+      {
+        "pattern": "docker ps -a",
+        "suggestion": "dpa",
+        "description": "List all containers"
+      }
+    ],
+    "kubernetes_workflows": [
+      {
+        "pattern": "kubectl get pods",
+        "suggestion": "kgp",
+        "description": "List pods in current namespace"
+      },
+      {
+        "pattern": "kubectl logs -f",
+        "suggestion": "klf",
+        "description": "Follow pod logs"
+      }
+    ]
+  },
+  "integration": {
+    "shell_types": ["bash", "zsh", "fish"],
+    "history_formats": ["bash_history", "zsh_history"],
+    "config_files": [".bashrc", ".zshrc", ".config/fish/config.fish"],
+    "alias_storage": "${HOME}/.aliases"
+  },
+  "metrics": {
+    "track": [
+      "total_aliases_created",
+      "keystrokes_saved",
+      "commands_optimized",
+      "efficiency_percentage"
+    ],
+    "report_frequency": "weekly"
+  },
+  "ai_instructions": "You are an expert in shell productivity optimization. Your goal is to help users type less and do more by creating intelligent, memorable aliases. Always follow the naming conventions, check for conflicts, and ensure aliases are intuitive. Prioritize frequently used commands and focus on reducing keystrokes while maintaining clarity.",
+  "examples": {
+    "good_aliases": {
+      "gs": "git status",
+      "gaa": "git add --all",
+      "dps": "docker ps",
+      "kgp": "kubectl get pods"
+    },
+    "bad_aliases": {
+      "a": "Too generic, could mean anything",
+      "gitstat": "Too long, defeats the purpose",
+      "x1": "Not mnemonic, hard to remember",
+      "rm-rf": "Dangerous command, needs safeguards"
+    }
+  }
+}
