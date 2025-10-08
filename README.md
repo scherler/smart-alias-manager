@@ -2,9 +2,9 @@
 
 **A powerful shell alias management system with AI-enhanced suggestions**
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/yourusername/smart-alias-manager)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/scherler/smart-alias-manager)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Shell](https://img.shields.io/badge/shell-bash%20%7C%20zsh-orange.svg)](https://github.com/yourusername/smart-alias-manager)
+[![Shell](https://img.shields.io/badge/shell-bash%20%7C%20zsh-orange.svg)](https://github.com/scherler/smart-alias-manager)
 
 ## ✨ Features
 
@@ -19,7 +19,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/smart-alias-manager.git
+git clone https://github.com/scherler/smart-alias-manager.git
 cd smart-alias-manager
 
 # Install
@@ -37,14 +37,14 @@ aa          # Analyze your command usage
 ### Automatic Installation
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/yourusername/smart-alias-manager/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/scherler/smart-alias-manager/main/install.sh | bash
 ```
 
 ### Manual Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/smart-alias-manager.git ~/.smart-alias-manager
+git clone https://github.com/scherler/smart-alias-manager.git ~/.smart-alias-manager
 ```
 
 2. Add to your shell configuration (`~/.bashrc`, `~/.zshrc`, etc.):
@@ -271,8 +271,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/smart-alias-manager/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/smart-alias-manager/discussions)
+- **Issues**: [GitHub Issues](https://github.com/scherler/smart-alias-manager/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/scherler/smart-alias-manager/discussions)
 - **Email**: your.email@example.com
 
 ---
