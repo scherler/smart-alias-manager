@@ -1,320 +1,380 @@
-# Integrating Alias Packs with Your Shell
+# Integrating Smart Alias Manager with Your Shell
 
-## Quick Integration
+This guide shows how to integrate the Smart Alias Manager pack system into your shell environment.
 
-### 1. Source the alias-enable Script
+## Quick Installation
 
-Add to your `~/.zshrc`:
-
-```bash
-# Smart Alias Manager - Pack System
-if [[ -f ~/.config/smart-aliases/alias-enable.sh ]]; then
-    source ~/.config/smart-aliases/alias-enable.sh
-
-    # Auto-load enabled packs on shell startup
-    alias-autoload
-fi
-```
-
-### 2. Copy Template Packs
+The easiest way to install is using the provided install script:
 
 ```bash
-# Create directories
-mkdir -p ~/.config/smart-aliases/packs/{local,community}
+# Clone repository
+git clone https://github.com/scherler/smart-alias-manager.git /src/smart-alias-manager
 
-# Copy templates
-cp /src/smart-alias-manager/packs/templates/*.json ~/.config/smart-aliases/packs/local/
-
-# Copy alias-enable script
-cp /src/smart-alias-manager/src/alias-enable.sh ~/.config/smart-aliases/
+# Run installer
+cd /src/smart-alias-manager
+./src/install.sh
 ```
 
-### 3. Install jq
+The installer will:
+- ✅ Check for dependencies (jq)
+- ✅ Create config directory structure
+- ✅ Generate config.json
+- ✅ Add 2-line integration to your shell config
+- ✅ Set up pack directories with .gitignore protection
+
+## Manual Installation
+
+If you prefer manual setup:
+
+### 1. Create Directory Structure
+
+```bash
+mkdir -p ~/.config/smart-aliases/packs/{local,community,cache}
+```
+
+### 2. Create config.json
+
+```bash
+cat > ~/.config/smart-aliases/config.json <<'EOF'
+{
+  "version": "1.0.0",
+  "enabled_packs": [],
+  "settings": {
+    "auto_load": true,
+    "show_loading_messages": true,
+    "check_requirements": true,
+    "allow_url_packs": true
+  }
+}
+EOF
+```
+
+### 3. Add to Shell Config
+
+Add to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+# Smart Alias Manager - Load alias packs and functions
+[[ -f /src/smart-alias-manager/src/loader.sh ]] && source /src/smart-alias-manager/src/loader.sh
+```
+
+That's it! Just **2 lines** for complete integration.
+
+### 4. Install Dependencies
 
 ```bash
 # Ubuntu/Debian
-sudo apt-get install jq
+sudo apt-get install jq python3
 
 # macOS
-brew install jq
-
-# Check installation
-jq --version
-```
-
-### 4. Reload Shell
-
-```bash
-source ~/.zshrc
-# or
-,.
-```
-
-### 5. Enable Your First Pack
-
-```bash
-# Enable git essentials
-alias-enable git-essentials
+brew install jq python3
 
 # Verify
-alias-enable --list
+jq --version
+python3 --version
 ```
 
-## Integration with cb-alias Plugin
-
-If you're using the cb-alias oh-my-zsh plugin:
-
-### Option 1: Add to Plugin File
-
-Edit `/src/thor/zsh/plugins/cb-alias/cb-alias.plugin.zsh`:
+### 5. Reload Shell
 
 ```bash
-currentDir=$(dirname ${0})
-source $currentDir/export.sh
-source $currentDir/hash.sh
-autoload -U zmv
-source $currentDir/alias-optimized.sh
-
-# Load alias pack system
-if [[ -f ~/.config/smart-aliases/alias-enable.sh ]]; then
-    source ~/.config/smart-aliases/alias-enable.sh
-    alias-autoload
-fi
+source ~/.zshrc
+# or for bash
+source ~/.bashrc
 ```
 
-### Option 2: Add to .zshrc After Plugin
+## Extract Your Existing Aliases
 
-In your `~/.zshrc`, after oh-my-zsh initialization:
+If you have existing aliases, extract them to JSON packs:
 
 ```bash
-# Oh My Zsh configuration
-plugins=(cb-alias ...)
-source $ZSH/oh-my-zsh.sh
+# Auto-detect alias file
+python3 /src/smart-alias-manager/src/extract-aliases.py
 
-# Alias Pack System (after plugins load)
-if [[ -f ~/.config/smart-aliases/alias-enable.sh ]]; then
-    source ~/.config/smart-aliases/alias-enable.sh
-    alias-autoload
-fi
+# Or specify source file
+python3 /src/smart-alias-manager/src/extract-aliases.py ~/.zshrc
+
+# Or specify both source and output
+python3 /src/smart-alias-manager/src/extract-aliases.py /path/to/aliases.sh /output/dir
 ```
 
-## Automated Setup Script
+This will create JSON packs in `~/.config/smart-aliases/packs/local/`.
 
-Create `~/.config/smart-aliases/setup-packs.sh`:
-
-```bash
-#!/bin/bash
-
-echo "🚀 Setting up Smart Alias Manager Pack System..."
-
-# Create directories
-mkdir -p ~/.config/smart-aliases/packs/{local,community,cache}
-
-# Copy scripts
-if [[ -f /src/smart-alias-manager/src/alias-enable.sh ]]; then
-    cp /src/smart-alias-manager/src/alias-enable.sh ~/.config/smart-aliases/
-    echo "✅ Copied alias-enable script"
-fi
-
-# Copy template packs
-if [[ -d /src/smart-alias-manager/packs/templates ]]; then
-    cp /src/smart-alias-manager/packs/templates/*.json ~/.config/smart-aliases/packs/local/
-    echo "✅ Copied template packs"
-fi
-
-# Check jq installation
-if ! command -v jq &> /dev/null; then
-    echo "⚠️  jq not found. Install with:"
-    echo "   Ubuntu/Debian: sudo apt-get install jq"
-    echo "   macOS: brew install jq"
-else
-    echo "✅ jq is installed"
-fi
-
-# Add to .zshrc if not present
-if ! grep -q "alias-enable.sh" ~/.zshrc; then
-    echo "" >> ~/.zshrc
-    echo "# Smart Alias Manager - Pack System" >> ~/.zshrc
-    echo "if [[ -f ~/.config/smart-aliases/alias-enable.sh ]]; then" >> ~/.zshrc
-    echo "    source ~/.config/smart-aliases/alias-enable.sh" >> ~/.zshrc
-    echo "    alias-autoload" >> ~/.zshrc
-    echo "fi" >> ~/.zshrc
-    echo "✅ Added to .zshrc"
-else
-    echo "✅ Already in .zshrc"
-fi
-
-echo ""
-echo "🎉 Setup complete!"
-echo ""
-echo "Next steps:"
-echo "  1. Reload shell: source ~/.zshrc"
-echo "  2. Enable a pack: alias-enable git-essentials"
-echo "  3. List enabled: alias-enable --list"
-```
-
-Then run:
-```bash
-chmod +x ~/.config/smart-aliases/setup-packs.sh
-~/.config/smart-aliases/setup-packs.sh
-```
-
-## Testing the Integration
+## Enable Packs
 
 ```bash
-# 1. Verify alias-enable is available
-type alias-enable
-
-# 2. Check help
-alias-enable --help
-
-# 3. List available packs
+# List available packs
 ls ~/.config/smart-aliases/packs/local/
 
-# 4. Enable a pack
-alias-enable git-essentials
+# Enable a pack
+alias-enable extracted-git
 
-# 5. Test an alias
-gs  # Should show git status
-
-# 6. List enabled packs
+# List enabled packs
 alias-enable --list
 
-# 7. Show pack info
-alias-enable --info git-essentials
+# Show pack details
+alias-enable --info extracted-git
 ```
 
-## Workflow Example
+## Integration Examples
 
-### Day 1: Setup
+### With Oh My Zsh
+
+Add after oh-my-zsh initialization in `~/.zshrc`:
 
 ```bash
-# Install and setup
-~/.config/smart-aliases/setup-packs.sh
-source ~/.zshrc
+# Oh My Zsh
+plugins=(git docker kubectl ...)
+source $ZSH/oh-my-zsh.sh
 
-# Enable essential packs
-alias-enable git-essentials
-alias-enable docker-essentials
+# Smart Alias Manager - Load alias packs and functions
+[[ -f /src/smart-alias-manager/src/loader.sh ]] && source /src/smart-alias-manager/src/loader.sh
 ```
 
-### Day 2: Add Custom Pack
+### With Custom Plugin Structure
+
+If you have a custom plugin directory:
 
 ```bash
-# Create custom pack
-cat > ~/.config/smart-aliases/packs/local/my-work.json <<EOF
+# Your custom plugins
+for plugin in ~/.zsh/plugins/*/*.plugin.zsh; do
+    source "$plugin"
+done
+
+# Smart Alias Manager - Load alias packs and functions
+[[ -f /src/smart-alias-manager/src/loader.sh ]] && source /src/smart-alias-manager/src/loader.sh
+```
+
+### Bash Integration
+
+Add to `~/.bashrc`:
+
+```bash
+# Smart Alias Manager - Load alias packs and functions
+if [ -f /src/smart-alias-manager/src/loader.sh ]; then
+    source /src/smart-alias-manager/src/loader.sh
+fi
+```
+
+## Configuration
+
+### Customize Pack Loading
+
+Edit `~/.config/smart-aliases/config.json`:
+
+```json
 {
-  "name": "my-work",
   "version": "1.0.0",
-  "author": "Me",
-  "description": "Work-specific aliases",
+  "enabled_packs": [
+    "extracted-git",
+    "extracted-docker",
+    "my-custom-pack"
+  ],
+  "settings": {
+    "auto_load": true,
+    "show_loading_messages": false,
+    "check_requirements": true,
+    "allow_url_packs": true
+  }
+}
+```
+
+**Settings:**
+- `auto_load`: Automatically load enabled packs on shell startup
+- `show_loading_messages`: Show "📦 Loading pack..." messages
+- `check_requirements`: Validate pack requirements before loading
+- `allow_url_packs`: Allow loading packs from URLs
+
+### Silent Loading
+
+To hide loading messages:
+
+```json
+{
+  "settings": {
+    "show_loading_messages": false
+  }
+}
+```
+
+## Creating Custom Packs
+
+### 1. Create Pack File
+
+Create `~/.config/smart-aliases/packs/local/my-pack.json`:
+
+```json
+{
+  "name": "my-pack",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "description": "My personal aliases",
+  "license": "MIT",
+  "tags": ["personal", "work"],
+  "requires": {
+    "zsh": ">=5.0"
+  },
   "aliases": [
     {
       "name": "deploy",
       "type": "alias",
       "command": "./deploy.sh production",
       "description": "Deploy to production",
-      "category": "work"
+      "category": "work",
+      "enabled": true
     }
   ]
 }
-EOF
-
-# Enable it
-alias-enable my-work
-
-# Test it
-deploy
 ```
 
-### Day 3: Share with Team
+### 2. Enable Your Pack
 
 ```bash
-# Push your pack to GitHub
-cd ~/.config/smart-aliases/packs/local
-git init
-git add my-work.json
-git commit -m "Add work aliases"
-git push origin main
-
-# Share with team
-# Team members can now run:
-# alias-enable https://raw.githubusercontent.com/you/repo/main/my-work.json
+alias-enable my-pack
 ```
 
-## Troubleshooting Integration
-
-### Issue: alias-enable not found
-
-**Solution**: Check sourcing order
+### 3. Reload
 
 ```bash
-# Add debug output to .zshrc
-echo "Loading alias-enable from: ~/.config/smart-aliases/alias-enable.sh"
-source ~/.config/smart-aliases/alias-enable.sh
-echo "alias-enable loaded successfully"
+alias-enable --reload
+# or
+source ~/.zshrc
 ```
 
-### Issue: Aliases not loading
+## Loading Packs from URLs
 
-**Solution**: Check auto-load
+Share packs across teams:
 
 ```bash
-# Manually load packs
-alias-autoload
+# Load from GitHub
+alias-enable https://raw.githubusercontent.com/user/repo/main/pack.json
 
-# Check enabled packs
-cat ~/.config/smart-aliases/enabled-packs.json
+# Pack is cached in ~/.config/smart-aliases/packs/cache/
 ```
 
-### Issue: Packs override existing aliases
+## Troubleshooting
 
-**Solution**: Load packs before core aliases
+### Packs Not Loading
 
 ```bash
-# In .zshrc, load packs first
-source ~/.config/smart-aliases/alias-enable.sh
-alias-autoload
+# Check config
+cat ~/.config/smart-aliases/config.json
 
-# Then load main aliases
-source /path/to/alias-optimized.sh
+# Check if loader.sh is sourced
+type alias-enable
+
+# Reload shell
+source ~/.zshrc
+
+# Check for errors
+alias-enable --list
 ```
 
-## Performance Considerations
-
-### Lazy Loading
-
-For faster shell startup, lazy load packs:
+### jq Errors
 
 ```bash
-# In .zshrc
-alias-enable() {
-    unfunction alias-enable  # Remove this wrapper
+# Validate pack JSON
+jq empty ~/.config/smart-aliases/packs/local/*.json
+
+# If errors, regenerate packs
+python3 /src/smart-alias-manager/src/extract-aliases.py
+```
+
+### Commands Not Found
+
+```bash
+# Verify loader.sh location
+ls -la /src/smart-alias-manager/src/loader.sh
+
+# Check if path is correct in .zshrc
+grep "loader.sh" ~/.zshrc
+
+# Make sure you've reloaded
+source ~/.zshrc
+```
+
+## Advanced Usage
+
+### Conditional Loading
+
+Load different packs based on hostname:
+
+```bash
+# In ~/.zshrc, before loader.sh
+if [[ "$(hostname)" == "work-laptop" ]]; then
+    # Configure for work
+    jq '.enabled_packs = ["work-aliases", "git", "docker"]' \
+        ~/.config/smart-aliases/config.json > tmp && \
+        mv tmp ~/.config/smart-aliases/config.json
+fi
+
+# Smart Alias Manager - Load alias packs and functions
+[[ -f /src/smart-alias-manager/src/loader.sh ]] && source /src/smart-alias-manager/src/loader.sh
+```
+
+### Performance Optimization
+
+For faster shell startup, disable loading messages:
+
+```bash
+# Edit config.json
+jq '.settings.show_loading_messages = false' \
+    ~/.config/smart-aliases/config.json > tmp && \
+    mv tmp ~/.config/smart-aliases/config.json
+```
+
+### Generate Efficiency Report
+
+Track your alias usage:
+
+```bash
+# Generate report
+/src/smart-alias-manager/src/generate-efficiency-report.sh
+
+# View report
+cat ~/.config/smart-aliases/efficiency-report.md
+```
+
+## Migration from Old Setup
+
+If you were using the old manual copy approach:
+
+### 1. Remove Old Files
+
+```bash
+# Remove manually copied scripts
+rm ~/.config/smart-aliases/alias-enable.sh
+rm ~/.config/smart-aliases/functions.sh
+rm ~/.config/smart-aliases/setup-packs.sh
+```
+
+### 2. Update .zshrc
+
+Replace old configuration:
+
+```bash
+# OLD (remove this)
+if [[ -f ~/.config/smart-aliases/alias-enable.sh ]]; then
     source ~/.config/smart-aliases/alias-enable.sh
-    alias-enable "$@"  # Call real function
-}
+    alias-autoload
+fi
+
+# NEW (use this)
+[[ -f /src/smart-alias-manager/src/loader.sh ]] && source /src/smart-alias-manager/src/loader.sh
 ```
 
-### Selective Loading
-
-Only load packs you need:
+### 3. Reload
 
 ```bash
-# Instead of auto-loading all
-# alias-autoload
-
-# Load specific packs
-alias-enable git-essentials
-alias-enable docker-essentials
+source ~/.zshrc
 ```
 
 ## Next Steps
 
-1. **Create Your First Pack**: See [packs/README.md](../packs/README.md)
-2. **Explore Templates**: Check `packs/templates/` for examples
-3. **Share Packs**: Create a GitHub repo with your packs
-4. **Join Community**: Share your packs with others!
+- 📖 Read [Alias Pack Guide](packs.md)
+- 📋 Review [JSON Schema](alias-pack-schema.md)
+- 🚀 Check [jrun Usage](jrun-usage.md)
+- 💡 Create your first alias with `alias-new`
 
 ---
 
-**Type less, do more! 🚀**
+*For more information, see the [main README](../README.md)*
