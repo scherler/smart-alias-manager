@@ -1,53 +1,31 @@
 #!/bin/bash
-# Extract aliases from alias-optimized.sh and convert to JSON packs
+# Wrapper script for extract-aliases.py
+# Extract aliases from shell files and convert to JSON packs
+#
+# Usage:
+#   extract-aliases.sh [source_file] [output_dir]
+#
+# Examples:
+#   extract-aliases.sh                              # Auto-detect source file
+#   extract-aliases.sh ~/.aliases                   # Specify source file
+#   extract-aliases.sh /path/to/aliases.sh /output  # Specify both
 
-SOURCE_FILE="/src/thor/zsh/plugins/cb-alias/alias-optimized.sh"
-OUTPUT_DIR="$HOME/.config/smart-aliases/packs/local"
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_SCRIPT="${SCRIPT_DIR}/extract-aliases.py"
 
-mkdir -p "$OUTPUT_DIR"
+# Check if Python script exists
+if [[ ! -f "$PYTHON_SCRIPT" ]]; then
+    echo "❌ Error: extract-aliases.py not found at $PYTHON_SCRIPT"
+    exit 1
+fi
 
-# Create git category pack
-cat > "$OUTPUT_DIR/extracted-git.json" <<'EOF'
-{
-  "name": "extracted-git",
-  "version": "1.0.0",
-  "author": "Extracted from alias-optimized.sh",
-  "description": "Git aliases extracted from your personal configuration",
-  "license": "MIT",
-  "tags": ["git", "vcs", "extracted"],
-  "requires": {
-    "commands": ["git"]
-  },
-  "aliases": [
-EOF
+# Check if Python is available
+if ! command -v python3 &> /dev/null; then
+    echo "❌ Error: python3 is required to run this script"
+    echo "Please install Python 3"
+    exit 1
+fi
 
-# Extract git aliases
-first=true
-grep "^alias g" "$SOURCE_FILE" | while IFS= read -r line; do
-    if [[ "$line" =~ ^alias\ ([^=]+)=\'([^\']+)\'.*#\ (.+)$ ]]; then
-        name="${BASH_REMATCH[1]}"
-        cmd="${BASH_REMATCH[2]}"
-        desc="${BASH_REMATCH[3]}"
-
-        [[ "$first" == "false" ]] && echo "," >> "$OUTPUT_DIR/extracted-git.json"
-        first=false
-
-        cat >> "$OUTPUT_DIR/extracted-git.json" <<ALIAS
-    {
-      "name": "$name",
-      "type": "alias",
-      "command": "$cmd",
-      "description": "$desc",
-      "category": "git",
-      "enabled": true
-    }
-ALIAS
-    fi
-done
-
-cat >> "$OUTPUT_DIR/extracted-git.json" <<'EOF'
-  ]
-}
-EOF
-
-echo "Created: $OUTPUT_DIR/extracted-git.json"
+# Pass all arguments to Python script
+python3 "$PYTHON_SCRIPT" "$@"

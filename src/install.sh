@@ -165,11 +165,6 @@ setup_shell_config() {
 # ============================================
 # Powerful alias management system with JSON-based packs
 
-# Source custom aliases first (if exists)
-if [[ -f "/src/thor/zsh/plugins/cb-alias/alias.sh" ]]; then
-    source "/src/thor/zsh/plugins/cb-alias/alias.sh"
-fi
-
 # Smart Alias Manager - Load alias packs and functions
 [[ -f $INSTALL_DIR/src/loader.sh ]] && source $INSTALL_DIR/src/loader.sh
 EOF
@@ -186,13 +181,6 @@ fi
 EOF
     fi
     echo "Added configuration to $SHELL_CONFIG"
-
-    # Add note about custom aliases
-    if [[ "$SHELL_TYPE" == "zsh" ]]; then
-        echo -e "${BLUE}ℹ️  Configured to source your custom aliases from:${NC}"
-        echo "   /src/thor/zsh/plugins/cb-alias/alias.sh"
-        echo -e "${BLUE}ℹ️  Run extract-aliases.py to convert them to JSON packs${NC}"
-    fi
 }
 
 # Create alias storage directory and config
@@ -340,13 +328,6 @@ test_installation() {
         else
             echo "⚠️  alias-new function not found (will be available after reloading shell)"
         fi
-
-        # Check if custom alias file exists
-        if [[ -f "/src/thor/zsh/plugins/cb-alias/alias.sh" ]]; then
-            echo "✅ Custom alias file found"
-        else
-            echo "⚠️  Custom alias file not found at /src/thor/zsh/plugins/cb-alias/alias.sh"
-        fi
     else
         # Bash test
         if command -v jq &> /dev/null; then
@@ -392,19 +373,19 @@ print_success() {
     fi
     echo ""
     echo "2. Extract your existing aliases to JSON packs:"
-    echo -e "   ${YELLOW}python3 $INSTALL_DIR/src/extract-aliases.py${NC}"
+    if [[ "$SHELL_TYPE" == "zsh" ]]; then
+        echo -e "   ${YELLOW}python3 $INSTALL_DIR/src/extract-aliases.py ~/.zshrc${NC}"
+    else
+        echo -e "   ${YELLOW}python3 $INSTALL_DIR/src/extract-aliases.py ~/.bashrc${NC}"
+    fi
+    echo "   Or if you have a separate aliases file:"
+    echo -e "   ${YELLOW}python3 $INSTALL_DIR/src/extract-aliases.py /path/to/your/aliases.sh${NC}"
     echo ""
     echo "3. Try these commands:"
     echo -e "   ${YELLOW}alias-enable --list${NC}         # List enabled packs"
     echo -e "   ${YELLOW}alias-enable extracted-git${NC}  # Enable a pack"
     echo -e "   ${YELLOW}alias-new 'git status'${NC}      # Create a new alias"
     echo -e "   ${YELLOW}alias-enable --info git${NC}     # Show pack details"
-
-    if [[ "$SHELL_TYPE" == "zsh" ]]; then
-        echo ""
-        echo "📦 Your custom aliases can be extracted from:"
-        echo -e "   ${YELLOW}/src/thor/zsh/plugins/cb-alias/alias.sh${NC}"
-    fi
     echo ""
     echo "4. Check the examples and templates:"
     echo -e "   ${YELLOW}ls $INSTALL_DIR/packs/templates/${NC}"

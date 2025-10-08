@@ -1,17 +1,30 @@
 #!/usr/bin/env python3
 """
-Extract aliases and functions from alias-optimized.sh and convert to JSON packs.
+Extract aliases and functions from shell alias files and convert to JSON packs.
 Organizes by category: git, docker, maven, npm/yarn, system, etc.
+
+Usage:
+    extract-aliases.py [source_file] [output_dir]
+
+Arguments:
+    source_file: Path to shell file containing aliases (default: ~/.aliases or ~/.zshrc)
+    output_dir:  Directory to save JSON packs (default: ~/.config/smart-aliases/packs/local)
 """
 
 import json
 import re
 import os
+import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
-SOURCE_FILE = "/src/thor/zsh/plugins/cb-alias/alias.sh"
-OUTPUT_DIR = Path.home() / ".config/smart-aliases/packs/local"
+# Default paths
+DEFAULT_SOURCE_FILES = [
+    Path.home() / ".aliases",
+    Path.home() / ".zshrc",
+    Path.home() / ".bashrc",
+]
+DEFAULT_OUTPUT_DIR = Path.home() / ".config/smart-aliases/packs/local"
 
 # Category mappings based on alias prefix or keywords
 CATEGORIES = {
@@ -240,24 +253,68 @@ def create_pack(category: str, aliases: List[Dict], functions: List[Dict], outpu
 
     return str(output_file)
 
+def find_source_file() -> Optional[Path]:
+    """Find the first existing default source file."""
+    for source in DEFAULT_SOURCE_FILES:
+        if source.exists():
+            return source
+    return None
+
+def print_usage():
+    """Print usage information."""
+    print(__doc__)
+    print("\nExamples:")
+    print("  extract-aliases.py")
+    print("  extract-aliases.py ~/.aliases")
+    print("  extract-aliases.py /path/to/aliases.sh /path/to/output")
+    print("\nDefault source file search order:")
+    for i, source in enumerate(DEFAULT_SOURCE_FILES, 1):
+        print(f"  {i}. {source}")
+
 def main():
     """Main extraction process."""
 
+    # Parse command-line arguments
+    source_file = None
+    output_dir = DEFAULT_OUTPUT_DIR
+
+    if len(sys.argv) > 1:
+        if sys.argv[1] in ['-h', '--help']:
+            print_usage()
+            sys.exit(0)
+        source_file = Path(sys.argv[1])
+        if not source_file.exists():
+            print(f"❌ Error: Source file not found: {source_file}")
+            sys.exit(1)
+    else:
+        # Try to find a default source file
+        source_file = find_source_file()
+        if not source_file:
+            print("❌ Error: No alias file found in default locations:")
+            for source in DEFAULT_SOURCE_FILES:
+                print(f"   - {source}")
+            print("\nPlease specify a source file:")
+            print("  extract-aliases.py /path/to/your/aliases.sh")
+            sys.exit(1)
+
+    if len(sys.argv) > 2:
+        output_dir = Path(sys.argv[2])
+
     print("🔍 Extracting aliases and functions...")
-    print(f"📄 Source: {SOURCE_FILE}")
-    print(f"📁 Output: {OUTPUT_DIR}")
+    print(f"📄 Source: {source_file}")
+    print(f"📁 Output: {output_dir}")
     print()
 
     # Create output directory
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Extract aliases
     print("⚙️  Extracting aliases...")
-    aliases_by_category = extract_aliases(SOURCE_FILE)
+    aliases_by_category = extract_aliases(str(source_file))
 
     # Extract functions
     print("⚙️  Extracting functions...")
-    functions_by_category = extract_functions(SOURCE_FILE)
+    functions_by_category = extract_functions(str(source_file))
 
     # Create pack files
     print()
@@ -273,7 +330,7 @@ def main():
         functions = functions_by_category.get(category, [])
 
         if aliases or functions:
-            output_file = create_pack(category, aliases, functions, OUTPUT_DIR)
+            output_file = create_pack(category, aliases, functions, output_dir)
             print(f"  ✅ {category:15} → {len(aliases):2} aliases, {len(functions)} functions")
             print(f"     {output_file}")
 
@@ -283,7 +340,7 @@ def main():
     print()
     print(f"✨ Extraction complete!")
     print(f"   Total: {total_aliases} aliases, {total_functions} functions")
-    print(f"   Created {len(all_categories)} pack files in {OUTPUT_DIR}")
+    print(f"   Created {len(all_categories)} pack files in {output_dir}")
     print()
     print("💡 Next steps:")
     print("   1. Review the generated packs")
