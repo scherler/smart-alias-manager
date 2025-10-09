@@ -88,7 +88,7 @@ def extract_aliases(source_file: str) -> Dict[str, List[Dict]]:
 
             if match:
                 name = match.group(1)
-                command = match.group(2).replace('"', '\\"')  # Escape quotes for JSON
+                command = match.group(2)  # No manual escaping; json.dump() handles it
                 description = match.group(3) or f"{name} command"
 
                 category = determine_category(name, command)

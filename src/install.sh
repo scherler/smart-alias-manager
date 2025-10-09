@@ -150,9 +150,9 @@ setup_shell_config() {
     if grep -q "Smart Alias Manager" "$SHELL_CONFIG" 2>/dev/null; then
         echo "Configuration already exists in $SHELL_CONFIG"
         # Remove old configuration to replace with new one
-        # Remove lines from "# ============================================" (Smart Alias Manager section)
-        # to the end of the loader.sh line or ALIAS_CONFIG_FILE export
-        sed -i.tmp '/# ============================================/,/source.*loader\.sh\|export ALIAS_CONFIG_FILE=/d' "$SHELL_CONFIG"
+        # Use more specific markers: start with "# Smart Alias Manager" comment
+        # and end after the loader.sh source line
+        sed -i.tmp '/# ============================================/,/^# Smart Alias Manager/d; /Smart Alias Manager - Load alias packs/,/source.*loader\.sh/d' "$SHELL_CONFIG"
         rm -f "${SHELL_CONFIG}.tmp"
     fi
     

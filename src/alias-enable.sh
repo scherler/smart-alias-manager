@@ -398,7 +398,19 @@ load_pack() {
 # Download pack from URL
 download_pack() {
     local url="$1"
-    local cache_file="${CACHE_DIR}/$(echo -n "$url" | md5sum | cut -d' ' -f1).json"
+
+    # Portable hash function (works on Linux with md5sum and macOS with md5)
+    local hash
+    if command -v md5sum >/dev/null 2>&1; then
+        hash=$(echo -n "$url" | md5sum | cut -d' ' -f1)
+    elif command -v md5 >/dev/null 2>&1; then
+        hash=$(echo -n "$url" | md5 -r | cut -d' ' -f1)
+    else
+        # Fallback: use first 32 chars of base64 encoded URL
+        hash=$(echo -n "$url" | base64 | head -c 32)
+    fi
+
+    local cache_file="${CACHE_DIR}/${hash}.json"
 
     echo "📥 Downloading pack from URL..."
 

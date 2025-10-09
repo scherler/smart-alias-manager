@@ -304,7 +304,16 @@ alias-new() {
 
     # Generate smart suggestions based on command
     local suggestions=()
-    local words=($=command)  # Use $= to force word splitting
+    # Split command into words (zsh/bash compatible)
+    # In zsh: use $=command for word splitting
+    # In bash: IFS splitting is enabled by default
+    if [[ -n "$ZSH_VERSION" ]]; then
+        setopt SH_WORD_SPLIT  # Enable word splitting in zsh
+        local words=($command)
+        unsetopt SH_WORD_SPLIT  # Restore default
+    else
+        local words=($command)  # bash splits by default
+    fi
     local first_word="${words[1]}"  # zsh arrays start at 1
 
     # Determine category based on command

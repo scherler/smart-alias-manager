@@ -154,7 +154,13 @@ function jrun {
         read choice
 
         if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 && "$choice" -le ${#products[@]} ]]; then
-            product="${products[$choice]}"
+            # zsh arrays are 1-based, bash arrays are 0-based
+            # Access using choice-1 for bash compatibility, then adjust for zsh
+            if [[ -n "$ZSH_VERSION" ]]; then
+                product="${products[$choice]}"  # zsh uses 1-based indexing
+            else
+                product="${products[$((choice-1))]}"  # bash uses 0-based indexing
+            fi
         else
             echo "❌ Invalid selection"
             return 1
