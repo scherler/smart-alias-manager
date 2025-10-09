@@ -71,12 +71,60 @@ alias-help() {
         # Show pack-based aliases first
         if [[ ${#pack_aliases[@]} -gt 0 ]]; then
             for pack in "${(@k)pack_aliases}"; do
-                local count=$(echo -e "${pack_aliases[$pack]}" | wc -l)
-                echo "📦 From pack: $pack ($count aliases)"
-                echo -e "${pack_aliases[$pack]}" | head -20 | while IFS= read -r line; do
-                    local name="${line%%=*}"
-                    echo "  $name"
+                # Find pack file
+                local pack_file=""
+                for dir in "${HOME}/.config/smart-aliases/packs/local" "${HOME}/.config/smart-aliases/packs/community"; do
+                    if [[ -f "$dir/${pack}.json" ]]; then
+                        pack_file="$dir/${pack}.json"
+                        break
+                    fi
                 done
+
+                # Get all alias names from the pack file
+                local alias_names=()
+                if [[ -n "$pack_file" ]] && command -v jq &>/dev/null; then
+                    while IFS= read -r name; do
+                        alias_names+=("$name")
+                    done < <(jq -r '.aliases[].name' "$pack_file" 2>/dev/null)
+                fi
+
+                local count=${#alias_names[@]}
+                echo "📦 From pack: $pack ($count aliases)"
+
+                # Process each alias
+                local shown=0
+                for name in "${alias_names[@]}"; do
+                    [[ $shown -ge 20 ]] && break
+
+                    # Get description from pack file
+                    local desc=""
+                    if [[ -n "$pack_file" ]] && command -v jq &>/dev/null; then
+                        desc=$(jq -r ".aliases[] | select(.name == \"$name\") | .description // \"\"" "$pack_file" 2>/dev/null)
+                    fi
+
+                    # Use command if description is generic or empty
+                    if [[ -z "$desc" ]] || [[ "$desc" == "$name command" ]] || [[ "$desc" == "$name"* && ${#desc} -lt 20 ]]; then
+                        # Get the actual alias command and clean it up
+                        local cmd=$(alias "$name" 2>/dev/null | sed "s/^$name=//")
+                        cmd="${cmd//\'/}"  # Remove quotes
+                        cmd="${cmd//\"/}"
+                        cmd="${cmd//$'\n'/ }"  # Replace newlines with spaces
+                        cmd="${cmd//  / }"  # Collapse multiple spaces
+                        cmd="${cmd## }"  # Trim leading spaces
+                        cmd="${cmd#\$}"  # Remove leading $ from $'...' syntax
+                        desc="$cmd"
+                    fi
+
+                    # Truncate very long descriptions/commands
+                    if [[ ${#desc} -gt 70 ]]; then
+                        desc="${desc:0:67}..."
+                    fi
+
+                    # Format output with proper alignment
+                    printf "  %-15s → %s\n" "$name" "$desc"
+                    ((shown++))
+                done
+
                 if [[ $count -gt 20 ]]; then
                     echo "  ... and $((count - 20)) more"
                 fi
@@ -90,7 +138,20 @@ alias-help() {
             echo "✏️  Custom aliases ($custom_count)"
             local shown=0
             for alias_name in "${(@k)custom_aliases_list}"; do
-                echo "  $alias_name"
+                local cmd="${custom_aliases_list[$alias_name]}"
+
+                # Clean up command
+                cmd="${cmd//\'/}"
+                cmd="${cmd//\"/}"
+                cmd="${cmd//$'\n'/ }"
+                cmd="${cmd//  / }"
+
+                # Truncate long commands
+                if [[ ${#cmd} -gt 70 ]]; then
+                    cmd="${cmd:0:67}..."
+                fi
+
+                printf "  %-15s → %s\n" "$alias_name" "$cmd"
                 ((shown++))
                 [[ $shown -ge 20 ]] && break
             done
