@@ -9,7 +9,10 @@
       "Bash(while IFS= read -r alias_json)",
       "Bash(do echo \"$alias_json\")",
       "Bash(git checkout:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)"
     ],
     "deny": [],
     "ask": []
