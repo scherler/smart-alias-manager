@@ -10,10 +10,12 @@
 
 - **📦 Modular Packs**: Organize aliases in shareable JSON packs
 - **🔄 Auto-Loading**: Automatically load enabled packs on shell startup
+- **⚡ Lightning Fast**: <15ms startup with static cache system
+- **🛡️ Conflict Detection**: Smart conflict resolution with suggestions
 - **🌐 Remote Packs**: Load alias packs from URLs
 - **⚡ Enhanced jrun**: Jenkins runner with smart port checking
 - **🎯 Efficiency First**: 80%+ keystroke reduction
-- **📊 Analytics**: Built-in efficiency reporting
+- **📊 Analytics**: Built-in efficiency reporting and tracking
 - **🔍 Smart Search**: Find and manage aliases easily
 
 ## 🎬 Quick Start
@@ -29,9 +31,9 @@ git clone https://github.com/scherler/smart-alias-manager.git /src/smart-alias-m
 source ~/.zshrc
 
 # Start using
-alias-enable --list      # List enabled packs
-jrun --help             # Enhanced Jenkins runner
-gs                      # git status (from extracted-git pack)
+alias-packs             # List all available packs
+alias-enable git        # Enable the git pack
+gs                      # git status (from git pack)
 ```
 
 ## 📦 Installation
@@ -97,9 +99,9 @@ Single config file at `~/.config/smart-aliases/config.json`:
 ```json
 {
   "enabled_packs": [
-    "extracted-git",
-    "extracted-maven",
-    "extracted-docker"
+    "git",
+    "maven",
+    "docker"
   ],
   "settings": {
     "auto_load": true,
@@ -112,14 +114,16 @@ Single config file at `~/.config/smart-aliases/config.json`:
 
 ### Pack Management
 
-| Command | Description |
-|---------|-------------|
-| `alias-enable --list` | List enabled packs |
-| `alias-enable <pack>` | Enable a pack |
-| `alias-enable --disable <pack>` | Disable a pack |
-| `alias-enable --info <pack>` | Show pack details |
-| `alias-enable --search <query>` | Search for packs |
-| `alias-enable --reload` | Reload all packs |
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `alias-packs` | `ap` | List all available packs (enabled/disabled) |
+| `alias-enable <pack>` | `ae` | Enable a pack with conflict detection |
+| `alias-enable --disable <pack>` | | Disable a pack |
+| `alias-enable --info <pack>` | | Show detailed pack information |
+| `alias-enable --list` | | List only enabled packs |
+| `alias-enable --search <query>` | | Search for packs by name/description |
+| `alias-enable --conflicts` | | Show conflict history |
+| `alias-refresh` | `ar` | Regenerate alias cache (fast reload) |
 
 ### Creating Aliases
 
@@ -220,6 +224,9 @@ smart-alias-manager/
 ```
 ~/.config/smart-aliases/
 ├── config.json              # Your configuration
+├── cache.sh                 # Pre-generated alias cache (auto-generated)
+├── metadata.json            # Alias source tracking
+├── conflicts.log            # Conflict resolution history
 └── packs/
     ├── local/               # Your custom packs
     ├── community/           # Downloaded packs
@@ -228,20 +235,23 @@ smart-alias-manager/
 
 ## 🚀 Usage Examples
 
-### Enable Extracted Packs
+### Enable Packs
 
 ```bash
-# List available packs
-ls ~/.config/smart-aliases/packs/local/
+# List all available packs with status
+alias-packs  # or: ap
 
 # Enable a pack
-alias-enable extracted-git
-
-# List enabled packs
-alias-enable --list
+alias-enable git  # or: ae git
 
 # Show pack details
-alias-enable --info extracted-git
+alias-enable --info git
+
+# List only enabled packs
+alias-enable --list
+
+# Refresh cache after manual changes
+alias-refresh  # or: ar
 ```
 
 ### Create Custom Pack
@@ -308,6 +318,58 @@ jrun -a core-oc
 - **~40 hours saved per year**
 
 See [efficiency report](reports/efficiency-report.md) for details.
+
+## ⚡ Performance & Optimization
+
+### Lightning-Fast Startup
+
+The system uses a **static cache** approach for instant shell startup:
+
+- **Pre-generated cache**: All aliases are pre-computed into `cache.sh`
+- **Zero parsing**: No JSON parsing at startup
+- **<15ms load time**: Typical startup in 13-15 milliseconds
+- **Auto-regeneration**: Cache updates automatically when packs change
+
+**How it works**:
+1. When you enable/disable packs, the cache is regenerated
+2. Shell startup simply sources the pre-generated `cache.sh` file
+3. Use `alias-refresh` to manually rebuild the cache if needed
+
+### Conflict Detection
+
+Smart conflict resolution protects your existing aliases:
+
+```bash
+# Example conflict scenario
+alias-enable docker  # You already have a custom 'dkc' alias
+
+# System detects conflict:
+⚠️  CONFLICTS DETECTED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The following aliases in 'docker' conflict with existing aliases:
+
+  ❌ dkc
+     Current (custom): docker compose
+     New     (docker): docker system prune
+
+     💡 Suggested alternatives:
+        - dkc2 (available)
+        - dkcp (available)
+
+Options:
+  1. Skip - Don't load conflicting aliases (safe)
+  2. Override - Replace existing aliases with new ones
+  3. Cancel - Don't enable this pack
+
+Choose [1/2/3] (default: 1):
+```
+
+**Features**:
+- Detects command differences (not just name conflicts)
+- Suggests alternative names
+- Logs all conflicts to `~/.config/smart-aliases/conflicts.log`
+- View history with `alias-enable --conflicts`
 
 ## 🎯 Best Practices
 

@@ -1,20 +1,20 @@
 {
   "permissions": {
     "allow": [
-      "Bash(while read line)",
-      "Bash(do echo \"$line\")",
-      "Bash(echo:*)",
-      "Bash(do echo \"=== $pack ===\")",
-      "Bash(do if ! jq empty \"$pack\")",
-      "Bash(while IFS= read -r alias_json)",
-      "Bash(do echo \"$alias_json\")",
-      "Bash(git checkout:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
-      "Bash(gh pr create:*)"
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep"
     ],
-    "deny": [],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~/)",
+      "Bash(dd:*)",
+      "Bash(mkfs:*)",
+      "Bash(format:*)"
+    ],
     "ask": []
   }
 }

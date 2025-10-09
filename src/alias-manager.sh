@@ -19,52 +19,117 @@ alias-help() {
         echo "=================================="
         echo ""
         echo "🔧 MANAGEMENT COMMANDS:"
-        echo "  ah (alias-help)  - Show this help or get specific alias info"
-        echo "  aw (alias-which) - Show command expansion for an alias"
-        echo "  af (alias-find)  - Search for aliases by keyword"
-        echo "  an (alias-new)   - Create new alias interactively"
+        echo "  ah (alias-help)    - Show this help or get specific alias info"
+        echo "  aw (alias-which)   - Show command expansion for an alias"
+        echo "  af (alias-find)    - Search for aliases by keyword"
+        echo "  an (alias-new)     - Create new alias interactively"
         echo "  aa (alias-analyze) - Analyze command history for optimization"
+        echo "  ap (alias-packs)   - List all available packs"
         echo ""
-        echo "📊 YOUR ALIASES:"
-        # List user's aliases grouped by category
-        local git_aliases=$(alias | grep "^g" | head -5)
-        local docker_aliases=$(alias | grep "^d" | head -5)
-        local system_aliases=$(alias | grep -v "^[gd]" | head -10)
-        
-        if [[ -n "$git_aliases" ]]; then
-            echo ""
-            echo "🔷 GIT ALIASES (sample):"
-            echo "$git_aliases" | while read line; do
-                echo "  ${line%%=*}"
-            done
+
+        # Check if metadata file exists
+        local metadata_file="${HOME}/.config/smart-aliases/metadata.json"
+        local has_metadata=false
+        if [[ -f "$metadata_file" ]] && command -v jq &>/dev/null; then
+            has_metadata=true
         fi
-        
-        if [[ -n "$docker_aliases" ]]; then
-            echo ""
-            echo "🔷 DOCKER ALIASES (sample):"
-            echo "$docker_aliases" | while read line; do
-                echo "  ${line%%=*}"
-            done
-        fi
-        
-        if [[ -n "$system_aliases" ]]; then
-            echo ""
-            echo "🔷 SYSTEM ALIASES (sample):"
-            echo "$system_aliases" | while read line; do
-                echo "  ${line%%=*}"
-            done
-        fi
-        
+
+        # Group aliases by pack
+        declare -A pack_aliases
+        declare -A custom_aliases_list
+        local total_aliases=0
+
+        # Get all current aliases
+        while IFS= read -r line; do
+            local alias_name="${line%%=*}"
+            local alias_cmd="${line#*=}"
+
+            # Skip management aliases
+            [[ "$alias_name" =~ ^(ah|aw|af|an|aa|ae|ap)$ ]] && continue
+
+            ((total_aliases++))
+
+            if [[ "$has_metadata" == "true" ]]; then
+                local source=$(jq -r ".alias_sources[\"$alias_name\"] // \"custom\"" "$metadata_file" 2>/dev/null)
+                if [[ "$source" == "custom" || -z "$source" ]]; then
+                    custom_aliases_list[$alias_name]="$alias_cmd"
+                else
+                    if [[ -z "${pack_aliases[$source]}" ]]; then
+                        pack_aliases[$source]="$alias_name=$alias_cmd"
+                    else
+                        pack_aliases[$source]="${pack_aliases[$source]}\n$alias_name=$alias_cmd"
+                    fi
+                fi
+            else
+                custom_aliases_list[$alias_name]="$alias_cmd"
+            fi
+        done < <(alias 2>/dev/null)
+
+        echo "📊 YOUR ALIASES (${total_aliases} total):"
         echo ""
-        echo "💡 TIP: Use 'alias-help <name>' for specific alias info"
-        echo "💡 TIP: Use 'alias-find <keyword>' to search aliases"
-        echo "💡 TIP: Use 'alias-analyze' to get optimization suggestions"
+
+        # Show pack-based aliases first
+        if [[ ${#pack_aliases[@]} -gt 0 ]]; then
+            for pack in "${(@k)pack_aliases}"; do
+                local count=$(echo -e "${pack_aliases[$pack]}" | wc -l)
+                echo "📦 From pack: $pack ($count aliases)"
+                echo -e "${pack_aliases[$pack]}" | head -20 | while IFS= read -r line; do
+                    local name="${line%%=*}"
+                    echo "  $name"
+                done
+                if [[ $count -gt 20 ]]; then
+                    echo "  ... and $((count - 20)) more"
+                fi
+                echo ""
+            done
+        fi
+
+        # Show custom aliases
+        if [[ ${#custom_aliases_list[@]} -gt 0 ]]; then
+            local custom_count=${#custom_aliases_list[@]}
+            echo "✏️  Custom aliases ($custom_count)"
+            local shown=0
+            for alias_name in "${(@k)custom_aliases_list}"; do
+                echo "  $alias_name"
+                ((shown++))
+                [[ $shown -ge 20 ]] && break
+            done
+            if [[ $custom_count -gt 20 ]]; then
+                echo "  ... and $((custom_count - 20)) more"
+            fi
+            echo ""
+        fi
+
+        # Only show samples if no aliases exist
+        if [[ $total_aliases -eq 0 ]]; then
+            echo "  No aliases loaded yet."
+            echo ""
+            echo "  💡 Enable a pack: alias-enable <pack-name>"
+            echo "  💡 Create an alias: alias-new <command>"
+            echo "  💡 View available packs: alias-packs"
+        else
+            echo "💡 TIP: Use 'alias-help <name>' for specific alias info"
+            echo "💡 TIP: Use 'alias-find <keyword>' to search aliases"
+            echo "💡 TIP: Use 'alias-packs' to see available packs"
+        fi
     else
         # Show specific alias info
         local alias_def=$(alias "$1" 2>/dev/null)
         if [[ -n "$alias_def" ]]; then
             echo "📌 Alias: $1"
             echo "Command: ${alias_def#*=}"
+
+            # Show pack source if available
+            local metadata_file="${HOME}/.config/smart-aliases/metadata.json"
+            if [[ -f "$metadata_file" ]] && command -v jq &>/dev/null; then
+                local source=$(jq -r ".alias_sources[\"$1\"] // \"custom\"" "$metadata_file" 2>/dev/null)
+                if [[ "$source" != "custom" && -n "$source" ]]; then
+                    echo "Source:  📦 $source"
+                else
+                    echo "Source:  ✏️  Custom"
+                fi
+            fi
+
             # Try to provide intelligent description based on command
             local cmd="${alias_def#*=}"
             cmd="${cmd//\'/}"  # Remove quotes

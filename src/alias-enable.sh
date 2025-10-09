@@ -9,6 +9,9 @@ PACKS_DIR="${ALIAS_CONFIG_DIR}/packs"
 LOCAL_PACKS_DIR="${PACKS_DIR}/local"
 COMMUNITY_PACKS_DIR="${PACKS_DIR}/community"
 CACHE_DIR="${PACKS_DIR}/cache"
+METADATA_FILE="${ALIAS_CONFIG_DIR}/metadata.json"
+CONFLICTS_LOG="${ALIAS_CONFIG_DIR}/conflicts.log"
+CACHE_FILE="${ALIAS_CONFIG_DIR}/cache.sh"
 
 # Ensure directories exist
 mkdir -p "${LOCAL_PACKS_DIR}" "${COMMUNITY_PACKS_DIR}" "${CACHE_DIR}"
@@ -16,6 +19,11 @@ mkdir -p "${LOCAL_PACKS_DIR}" "${COMMUNITY_PACKS_DIR}" "${CACHE_DIR}"
 # Initialize config file if it doesn't exist
 if [[ ! -f "${CONFIG_FILE}" ]]; then
     echo '{"version": "1.0.0", "enabled_packs": [], "settings": {"auto_load": true}}' > "${CONFIG_FILE}"
+fi
+
+# Initialize metadata file if it doesn't exist
+if [[ ! -f "${METADATA_FILE}" ]]; then
+    echo '{"alias_sources": {}, "conflicts": {}}' > "${METADATA_FILE}"
 fi
 
 # Check if a command exists
@@ -84,15 +92,260 @@ check_requirements() {
     return $errors
 }
 
+# Record alias source in metadata
+record_alias_source() {
+    local alias_name="$1"
+    local pack_name="$2"
+
+    jq ".alias_sources[\"$alias_name\"] = \"$pack_name\"" "$METADATA_FILE" > "${METADATA_FILE}.tmp"
+    mv "${METADATA_FILE}.tmp" "$METADATA_FILE"
+}
+
+# Get alias source pack
+get_alias_source() {
+    local alias_name="$1"
+    jq -r ".alias_sources[\"$alias_name\"] // \"custom\"" "$METADATA_FILE" 2>/dev/null || echo "custom"
+}
+
+# Log conflict to file
+log_conflict() {
+    local alias_name="$1"
+    local existing_pack="$2"
+    local new_pack="$3"
+    local existing_cmd="$4"
+    local new_cmd="$5"
+    local resolution="$6"
+
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+    cat >> "$CONFLICTS_LOG" <<EOF
+[$timestamp] CONFLICT: $alias_name
+  Existing: $existing_pack → $existing_cmd
+  New:      $new_pack → $new_cmd
+  Resolution: $resolution
+
+EOF
+
+    # Also record in metadata
+    jq ".conflicts[\"$alias_name\"] = {\"existing_pack\": \"$existing_pack\", \"new_pack\": \"$new_pack\", \"resolution\": \"$resolution\", \"timestamp\": \"$timestamp\"}" "$METADATA_FILE" > "${METADATA_FILE}.tmp"
+    mv "${METADATA_FILE}.tmp" "$METADATA_FILE"
+}
+
+# Suggest alternative alias names
+suggest_alternatives() {
+    local alias_name="$1"
+    local suggestions=()
+
+    # Try appending numbers
+    for i in {2..5}; do
+        if ! alias "$alias_name$i" &>/dev/null; then
+            suggestions+=("$alias_name$i")
+            break
+        fi
+    done
+
+    # Try different prefixes based on alias pattern
+    if [[ ${#alias_name} -eq 2 ]]; then
+        # Two-letter alias, try adding third letter
+        local prefix="${alias_name:0:1}"
+        local chars=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
+        for char in "${chars[@]}"; do
+            local alt="${alias_name}${char}"
+            if ! alias "$alt" &>/dev/null && [[ ! " ${suggestions[@]} " =~ " ${alt} " ]]; then
+                suggestions+=("$alt")
+                [[ ${#suggestions[@]} -ge 3 ]] && break
+            fi
+        done
+    else
+        # Try shortening or alternate abbreviations
+        if [[ ${#alias_name} -gt 2 ]]; then
+            local short="${alias_name:0:2}"
+            if ! alias "$short" &>/dev/null; then
+                suggestions+=("$short")
+            fi
+        fi
+    fi
+
+    # Print suggestions
+    for suggestion in "${suggestions[@]}"; do
+        echo "$suggestion"
+    done
+}
+
+# Check for alias conflicts before loading
+check_alias_conflicts() {
+    local pack_file="$1"
+    local pack_name=$(jq -r '.name' "$pack_file")
+    local conflicts=()
+    local conflict_details=()
+
+    # Check all aliases in the pack
+    while IFS= read -r alias_json; do
+        local name=$(echo "$alias_json" | jq -r '.name')
+        local command=$(echo "$alias_json" | jq -r '.command')
+        local enabled=$(echo "$alias_json" | jq -r '.enabled // true')
+
+        if [[ "$enabled" != "true" ]]; then
+            continue
+        fi
+
+        # Check if alias already exists
+        local existing=$(alias "$name" 2>/dev/null)
+        if [[ -n "$existing" ]]; then
+            local existing_cmd="${existing#*=}"
+            local existing_pack=$(get_alias_source "$name")
+
+            # Only conflict if commands are different
+            if [[ "$existing_cmd" != "'$command'" && "$existing_cmd" != "\"$command\"" ]]; then
+                conflicts+=("$name")
+                conflict_details+=("$name|$existing_pack|$pack_name|${existing_cmd}|$command")
+            fi
+        fi
+    done < <(jq -c '.aliases[]?' "$pack_file")
+
+    if [[ ${#conflicts[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    # Display conflicts
+    echo "⚠️  CONFLICTS DETECTED"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "The following aliases in '$pack_name' conflict with existing aliases:"
+    echo ""
+
+    for detail in "${conflict_details[@]}"; do
+        IFS='|' read -r alias_name existing_pack new_pack existing_cmd new_cmd <<< "$detail"
+        echo "  ❌ $alias_name"
+        echo "     Current ($existing_pack): $existing_cmd"
+        echo "     New     ($new_pack): $new_cmd"
+        echo ""
+
+        # Suggest alternatives
+        echo "     💡 Suggested alternatives:"
+        local alts=($(suggest_alternatives "$alias_name"))
+        for alt in "${alts[@]:0:3}"; do
+            echo "        - $alt (available)"
+        done
+        echo ""
+    done
+
+    echo "Options:"
+    echo "  1. Skip - Don't load conflicting aliases (safe)"
+    echo "  2. Override - Replace existing aliases with new ones (⚠️  replaces $existing_pack)"
+    echo "  3. Cancel - Don't enable this pack"
+    echo ""
+    echo -n "Choose [1/2/3] (default: 1): "
+    read choice
+
+    case "$choice" in
+        2)
+            # Override - allow conflicts
+            for detail in "${conflict_details[@]}"; do
+                IFS='|' read -r alias_name existing_pack new_pack existing_cmd new_cmd <<< "$detail"
+                log_conflict "$alias_name" "$existing_pack" "$new_pack" "$existing_cmd" "$new_cmd" "override"
+            done
+            return 0
+            ;;
+        3)
+            # Cancel
+            echo "❌ Pack activation cancelled"
+            return 2
+            ;;
+        *)
+            # Skip conflicts (default)
+            for detail in "${conflict_details[@]}"; do
+                IFS='|' read -r alias_name existing_pack new_pack existing_cmd new_cmd <<< "$detail"
+                log_conflict "$alias_name" "$existing_pack" "$new_pack" "$existing_cmd" "$new_cmd" "skipped"
+            done
+            return 1
+            ;;
+    esac
+}
+
+# Generate static cache file for fast loading
+generate_cache() {
+    local show_progress="${1:-true}"
+
+    [[ "$show_progress" == "true" ]] && echo "♻️  Regenerating alias cache..."
+
+    # Start with header
+    cat > "$CACHE_FILE" <<'EOF'
+#!/usr/bin/env zsh
+# Auto-generated alias cache
+# Generated by smart-alias-manager
+# DO NOT EDIT MANUALLY - use alias-enable/alias-refresh instead
+
+EOF
+
+    # Load each enabled pack and extract aliases
+    while IFS= read -r pack_name; do
+        local pack_file=$(find_pack "$pack_name")
+        if [[ -n "$pack_file" ]]; then
+            echo "# Pack: $pack_name" >> "$CACHE_FILE"
+
+            # Extract and write aliases
+            while IFS= read -r alias_json; do
+                local name=$(echo "$alias_json" | jq -r '.name')
+                local type=$(echo "$alias_json" | jq -r '.type')
+                local command=$(echo "$alias_json" | jq -r '.command')
+                local enabled=$(echo "$alias_json" | jq -r '.enabled // true')
+
+                if [[ "$enabled" != "true" ]]; then
+                    continue
+                fi
+
+                if [[ "$type" == "alias" ]]; then
+                    # Escape single quotes in command
+                    local escaped_cmd="${command//\'/\'\\\'\'}"
+                    echo "alias ${name}='${escaped_cmd}'" >> "$CACHE_FILE"
+                elif [[ "$type" == "global" ]]; then
+                    local escaped_cmd="${command//\'/\'\\\'\'}"
+                    echo "alias -g ${name}='${escaped_cmd}'" >> "$CACHE_FILE"
+                fi
+            done < <(jq -c '.aliases[]?' "$pack_file")
+
+            echo "" >> "$CACHE_FILE"
+        else
+            [[ "$show_progress" == "true" ]] && echo "⚠️  Pack not found: $pack_name"
+        fi
+    done < <(jq -r '.enabled_packs[]' "$CONFIG_FILE" 2>/dev/null)
+
+    # Make cache file executable
+    chmod +x "$CACHE_FILE"
+
+    [[ "$show_progress" == "true" ]] && echo "✅ Cache regenerated: $CACHE_FILE"
+}
+
 # Load pack and create aliases/functions
 load_pack() {
     local pack_file="$1"
+    local skip_conflicts="${2:-false}"
     local pack_name=$(jq -r '.name' "$pack_file")
 
     echo "📦 Loading pack: $pack_name"
 
+    # Get list of skipped aliases from conflicts
+    local skipped_aliases=()
+    if [[ "$skip_conflicts" == "true" ]]; then
+        while IFS= read -r alias_json; do
+            local name=$(echo "$alias_json" | jq -r '.name')
+            local enabled=$(echo "$alias_json" | jq -r '.enabled // true')
+
+            if [[ "$enabled" != "true" ]]; then
+                continue
+            fi
+
+            # Check if alias already exists
+            if alias "$name" &>/dev/null; then
+                skipped_aliases+=("$name")
+            fi
+        done < <(jq -c '.aliases[]?' "$pack_file")
+    fi
+
     # Load aliases
     local alias_count=0
+    local skipped_count=0
     while IFS= read -r alias_json; do
         local name=$(echo "$alias_json" | jq -r '.name')
         local type=$(echo "$alias_json" | jq -r '.type')
@@ -102,13 +355,21 @@ load_pack() {
             continue
         fi
 
+        # Skip if in skipped list
+        if [[ "$skip_conflicts" == "true" ]] && [[ " ${skipped_aliases[@]} " =~ " ${name} " ]]; then
+            ((skipped_count++))
+            continue
+        fi
+
         if [[ "$type" == "alias" ]]; then
             local command=$(echo "$alias_json" | jq -r '.command')
             alias "$name"="$command"
+            record_alias_source "$name" "$pack_name"
             ((alias_count++))
         elif [[ "$type" == "global" ]]; then
             local command=$(echo "$alias_json" | jq -r '.command')
             alias -g "$name"="$command"
+            record_alias_source "$name" "$pack_name"
             ((alias_count++))
         fi
     done < <(jq -c '.aliases[]?' "$pack_file")
@@ -127,7 +388,11 @@ load_pack() {
     #     ((function_count++))
     # done < <(jq -c '.functions[]?' "$pack_file")
 
-    echo "✅ Loaded $alias_count aliases and $function_count functions from $pack_name"
+    if [[ $skipped_count -gt 0 ]]; then
+        echo "✅ Loaded $alias_count aliases ($skipped_count skipped due to conflicts) and $function_count functions from $pack_name"
+    else
+        echo "✅ Loaded $alias_count aliases and $function_count functions from $pack_name"
+    fi
 }
 
 # Download pack from URL
@@ -199,6 +464,9 @@ enable_pack_persistent() {
         jq ".enabled_packs += [\"$pack_name\"]" "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"
         mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
     fi
+
+    # Regenerate cache
+    generate_cache false
 }
 
 # Remove pack from enabled list
@@ -207,6 +475,9 @@ disable_pack_persistent() {
 
     jq ".enabled_packs = (.enabled_packs - [\"$pack_name\"])" "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"
     mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+
+    # Regenerate cache
+    generate_cache false
 }
 
 # List enabled packs
@@ -234,6 +505,104 @@ list_enabled() {
         echo ""
         echo "  💡 Enable a pack with: alias-enable <pack-name>"
     fi
+}
+
+# List all available packs
+list_all_packs() {
+    check_jq || return 1
+
+    echo "📦 All Available Alias Packs:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Get list of enabled packs
+    local enabled_packs=($(jq -r '.enabled_packs[]' "$CONFIG_FILE" 2>/dev/null))
+
+    local total=0
+
+    # Enable null_glob to handle empty directories gracefully
+    setopt local_options null_glob
+
+    # Check each pack directory
+    for pack_dir in "$LOCAL_PACKS_DIR" "$COMMUNITY_PACKS_DIR"; do
+        local dir_name=$(basename "$pack_dir")
+        local found_in_dir=0
+
+        # Skip if directory doesn't exist
+        [[ ! -d "$pack_dir" ]] && continue
+
+        for pack_file in "$pack_dir"/*.json; do
+            if [[ -f "$pack_file" ]]; then
+                local name=$(jq -r '.name' "$pack_file" 2>/dev/null)
+                local version=$(jq -r '.version' "$pack_file" 2>/dev/null)
+                local desc=$(jq -r '.description' "$pack_file" 2>/dev/null)
+                local alias_count=$(jq '[.aliases[]?] | length' "$pack_file" 2>/dev/null)
+
+                # Check if enabled
+                local pack_status="○"
+                local pack_state="disabled"
+                if [[ " ${enabled_packs[@]} " =~ " ${name} " ]]; then
+                    pack_status="●"
+                    pack_state="enabled"
+                fi
+
+                # Print pack info
+                if [[ $found_in_dir -eq 0 ]]; then
+                    # Capitalize first letter (zsh compatible)
+                    local display_name="${(C)dir_name}"
+                    echo "📁 ${display_name}:"
+                    found_in_dir=1
+                fi
+
+                echo "  $pack_status $name (v$version) - $pack_state"
+                echo "    $desc"
+                echo "    Aliases: $alias_count"
+                echo ""
+
+                ((total++))
+            fi
+        done
+    done
+
+    if [[ $total -eq 0 ]]; then
+        echo "  No packs found."
+        echo ""
+        echo "  💡 Create packs using: alias-new <command>"
+        echo "  💡 Or extract from existing config: extract-aliases.py"
+    else
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Total: $total packs (${#enabled_packs[@]} enabled)"
+        echo ""
+        echo "💡 Enable a pack:  alias-enable <pack-name>"
+        echo "💡 Disable a pack: alias-enable --disable <pack-name>"
+        echo "💡 View details:   alias-enable --info <pack-name>"
+    fi
+}
+
+# Show conflict history
+show_conflicts() {
+    check_jq || return 1
+
+    echo "⚠️  Alias Conflict History:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Check if conflicts log exists
+    if [[ ! -f "$CONFLICTS_LOG" || ! -s "$CONFLICTS_LOG" ]]; then
+        echo "  ✅ No conflicts recorded."
+        echo ""
+        echo "  The system automatically detects conflicts when enabling packs."
+        return 0
+    fi
+
+    # Display conflicts from log file
+    cat "$CONFLICTS_LOG"
+
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "💡 To view current aliases: alias-help"
+    echo "💡 To see which pack an alias is from: alias-which <name>"
+    echo "💡 Log file: $CONFLICTS_LOG"
 }
 
 # Show pack info
@@ -331,9 +700,11 @@ alias-enable() {
             echo ""
             echo "Options:"
             echo "  --list, -l          List enabled packs"
+            echo "  --all               List all available packs"
             echo "  --info PACK         Show pack information"
             echo "  --disable PACK      Disable a pack"
             echo "  --search QUERY      Search for packs"
+            echo "  --conflicts         Show current alias conflicts"
             echo "  --reload            Reload all enabled packs"
             echo "  --help, -h          Show this help"
             echo ""
@@ -343,8 +714,10 @@ alias-enable() {
             echo "Examples:"
             echo "  alias-enable git-essentials          # Enable local pack"
             echo "  alias-enable https://example.com/pack.json  # Enable from URL"
+            echo "  alias-enable --all                   # List all available packs"
             echo "  alias-enable --info docker-essentials"
             echo "  alias-enable --disable git-essentials"
+            echo "  alias-enable --conflicts             # Show conflict history"
             echo "  alias-enable --search docker"
             echo ""
             echo "Pack locations:"
@@ -379,6 +752,16 @@ alias-enable() {
             fi
             check_jq || return 1
             search_packs "$2"
+            return 0
+            ;;
+        --all)
+            check_jq || return 1
+            list_all_packs
+            return 0
+            ;;
+        --conflicts)
+            check_jq || return 1
+            show_conflicts
             return 0
             ;;
         --reload)
@@ -425,8 +808,19 @@ alias-enable() {
             # Check requirements
             check_requirements "$pack_file"
 
-            # Load pack
-            load_pack "$pack_file"
+            # Check for conflicts
+            check_alias_conflicts "$pack_file"
+            local conflict_result=$?
+
+            if [[ $conflict_result -eq 2 ]]; then
+                # User cancelled
+                return 1
+            fi
+
+            # Load pack (skip conflicts if user chose option 1)
+            local skip_conflicts="false"
+            [[ $conflict_result -eq 1 ]] && skip_conflicts="true"
+            load_pack "$pack_file" "$skip_conflicts"
 
             # Add to enabled list
             local pack_name=$(jq -r '.name' "$pack_file")
@@ -442,16 +836,44 @@ alias-enable() {
 }
 
 # Auto-load enabled packs on shell startup (call this from .zshrc)
+# Fast version: just sources the pre-generated cache file
 alias-autoload() {
-    if [[ -f "${CONFIG_FILE}" ]] && command_exists jq; then
-        while IFS= read -r pack_name; do
-            local pack_file=$(find_pack "$pack_name")
-            if [[ -n "$pack_file" ]]; then
-                load_pack "$pack_file"
-            fi
-        done < <(jq -r '.enabled_packs[]' "$CONFIG_FILE" 2>/dev/null)
+    # Check if cache exists, if not generate it
+    if [[ ! -f "$CACHE_FILE" ]]; then
+        # Silently check if jq is available
+        if ! command_exists jq; then
+            return 1
+        fi
+        generate_cache false
     fi
+
+    # Simply source the pre-generated cache file - INSTANT!
+    source "$CACHE_FILE" 2>/dev/null
+}
+
+# Refresh alias cache (regenerate from packs)
+alias-refresh() {
+    check_jq || return 1
+
+    echo "🔄 Refreshing alias system..."
+    echo ""
+
+    # Regenerate cache from enabled packs
+    generate_cache true
+
+    # Reload in current shell
+    source "$CACHE_FILE" 2>/dev/null
+
+    echo ""
+    echo "✅ Refresh complete! Aliases reloaded."
+}
+
+# Shortcut command for listing all packs
+alias-packs() {
+    alias-enable --all
 }
 
 # Export functions
 alias ae='alias-enable'  # Short alias
+alias ap='alias-packs'   # Short alias for pack listing
+alias ar='alias-refresh' # Short alias for refreshing cache
