@@ -19,12 +19,14 @@ alias-help() {
         echo "=================================="
         echo ""
         echo "🔧 MANAGEMENT COMMANDS:"
-        echo "  ah (alias-help)    - Show this help or get specific alias info"
-        echo "  aw (alias-which)   - Show command expansion for an alias"
-        echo "  af (alias-find)    - Search for aliases by keyword"
-        echo "  an (alias-new)     - Create new alias interactively"
-        echo "  aa (alias-analyze) - Analyze command history for optimization"
-        echo "  ap (alias-packs)   - List all available packs"
+        echo "  ah  (alias-help)    - Show this help or get specific alias info"
+        echo "  aw  (alias-which)   - Show command expansion and file location"
+        echo "  af  (alias-find)    - Search for aliases by keyword"
+        echo "  an  (alias-new)     - Create new alias interactively"
+        echo "  au  (alias-update)  - Update an existing alias"
+        echo "  als (alias-aliases) - List all aliases with file paths"
+        echo "  aa  (alias-analyze) - Analyze command history for optimization"
+        echo "  ap  (alias-packs)   - List all available packs"
         echo ""
 
         # Check if metadata file exists
@@ -214,16 +216,55 @@ alias-help() {
 alias-which() {
     if [[ -z "$1" ]]; then
         echo "Usage: alias-which <alias-name>"
-        echo "Shows the full command expansion for an alias"
+        echo "Shows the full command expansion and location for an alias"
         echo ""
         echo "Example: alias-which gs"
-        echo "Output: 'git status'"
+        echo "Output: Command and file location"
     else
         local alias_def=$(alias "$1" 2>/dev/null)
         if [[ -n "$alias_def" ]]; then
-            echo "${alias_def#*=}"
+            echo "📌 Alias: $1"
+            echo "Command: ${alias_def#*=}"
+
+            # Find the pack file containing this alias
+            local metadata_file="${HOME}/.config/smart-aliases/metadata.json"
+            local pack_name=""
+            local pack_file=""
+
+            if [[ -f "$metadata_file" ]] && command -v jq &>/dev/null; then
+                pack_name=$(jq -r ".alias_sources[\"$1\"] // \"\"" "$metadata_file" 2>/dev/null)
+            fi
+
+            if [[ -n "$pack_name" ]]; then
+                # Check local and community packs
+                for dir in "${HOME}/.config/smart-aliases/packs/local" "${HOME}/.config/smart-aliases/packs/community"; do
+                    if [[ -f "$dir/${pack_name}.json" ]]; then
+                        pack_file="$dir/${pack_name}.json"
+                        break
+                    fi
+                done
+
+                if [[ -n "$pack_file" ]]; then
+                    echo "Pack:    📦 $pack_name"
+                    echo "File:    📁 $pack_file"
+
+                    # Show description if available
+                    if command -v jq &>/dev/null; then
+                        local desc=$(jq -r ".aliases[] | select(.name == \"$1\") | .description // \"\"" "$pack_file" 2>/dev/null)
+                        if [[ -n "$desc" && "$desc" != "$1 command" ]]; then
+                            echo "Info:    $desc"
+                        fi
+                    fi
+                else
+                    echo "Pack:    📦 $pack_name"
+                    echo "File:    ⚠️  Pack file not found"
+                fi
+            else
+                echo "Source:  ✏️  Custom (session only)"
+                echo "File:    Not saved to pack"
+            fi
         else
-            echo "Alias '$1' not found"
+            echo "❌ Alias '$1' not found"
             # Try to suggest similar aliases
             local similar=$(alias | grep "$1" | head -3)
             if [[ -n "$similar" ]]; then
@@ -476,19 +517,254 @@ EOF
     echo "   alias-enable extracted-${category}"
 }
 
+alias-update() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: alias-update <alias-name>"
+        echo "Updates an existing alias's command and/or description"
+        echo ""
+        echo "Examples:"
+        echo "  alias-update gs        # Update the 'gs' alias"
+        echo "  alias-update xc        # Update the 'xc' alias"
+        return
+    fi
+
+    # Check if jq is available
+    if ! command -v jq &> /dev/null; then
+        echo "❌ Error: jq is required for alias pack management"
+        echo "Install: sudo apt-get install jq (or brew install jq on macOS)"
+        return 1
+    fi
+
+    local alias_name="$1"
+    local packs_dir="${HOME}/.config/smart-aliases/packs/local"
+
+    # Check if alias exists
+    local alias_def=$(alias "$alias_name" 2>/dev/null)
+    if [[ -z "$alias_def" ]]; then
+        echo "❌ Alias '$alias_name' not found"
+        echo "💡 Use 'alias-help' to see all available aliases"
+        echo "💡 Use 'alias-new' to create a new alias"
+        return 1
+    fi
+
+    # Find the pack file containing this alias
+    local metadata_file="${HOME}/.config/smart-aliases/metadata.json"
+    local pack_name=""
+    local pack_file=""
+
+    if [[ -f "$metadata_file" ]] && command -v jq &>/dev/null; then
+        pack_name=$(jq -r ".alias_sources[\"$alias_name\"] // \"\"" "$metadata_file" 2>/dev/null)
+    fi
+
+    if [[ -n "$pack_name" ]]; then
+        # Check local packs
+        for dir in "${HOME}/.config/smart-aliases/packs/local" "${HOME}/.config/smart-aliases/packs/community"; do
+            if [[ -f "$dir/${pack_name}.json" ]]; then
+                pack_file="$dir/${pack_name}.json"
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "$pack_file" ]]; then
+        echo "❌ Could not find pack file for alias '$alias_name'"
+        echo "💡 This might be a session-only alias or from a non-standard location"
+        return 1
+    fi
+
+    # Get current values
+    local current_cmd=$(echo "${alias_def#*=}" | sed "s/^'//" | sed "s/'$//")
+    local current_desc=$(jq -r ".aliases[] | select(.name == \"$alias_name\") | .description // \"\"" "$pack_file" 2>/dev/null)
+
+    echo "📝 Updating alias: $alias_name"
+    echo "📁 Pack file: $pack_file"
+    echo ""
+    echo "Current command:     $current_cmd"
+    echo "Current description: $current_desc"
+    echo ""
+
+    # Get new command
+    echo -n "New command (press Enter to keep current): "
+    read new_cmd
+    [[ -z "$new_cmd" ]] && new_cmd="$current_cmd"
+
+    # Get new description
+    echo -n "New description (press Enter to keep current): "
+    read new_desc
+    [[ -z "$new_desc" ]] && new_desc="$current_desc"
+
+    # Escape for JSON
+    local escaped_cmd=$(echo "$new_cmd" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+    local escaped_desc=$(echo "$new_desc" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+
+    # Update the alias in the pack file
+    jq ".aliases = [.aliases[] | if .name == \"$alias_name\" then .command = \"$escaped_cmd\" | .description = \"$escaped_desc\" else . end]" "$pack_file" > "${pack_file}.tmp" && mv "${pack_file}.tmp" "$pack_file"
+
+    # Validate JSON
+    if ! jq empty "$pack_file" 2>/dev/null; then
+        echo "❌ Error: Invalid JSON generated"
+        return 1
+    fi
+
+    # Update alias in current session
+    alias "$alias_name"="$new_cmd"
+
+    echo ""
+    echo "✅ Alias updated successfully!"
+    echo ""
+    echo "📌 Updated: $alias_name = '$new_cmd'"
+    echo "📦 Saved to: $pack_file"
+    echo ""
+    echo "💡 The alias is now active in your current session"
+    echo "💡 Run 'alias-refresh' to update the cache for future sessions"
+}
+
+alias-aliases() {
+    echo "📚 ALL ALIASES WITH LOCATIONS"
+    echo "=================================="
+    echo ""
+
+    # Check if metadata file exists
+    local metadata_file="${HOME}/.config/smart-aliases/metadata.json"
+    local has_metadata=false
+    if [[ -f "$metadata_file" ]] && command -v jq &>/dev/null; then
+        has_metadata=true
+    fi
+
+    # Group aliases by pack
+    declare -A pack_aliases
+    declare -A custom_aliases_list
+    local total_aliases=0
+
+    # Get all current aliases
+    while IFS= read -r line; do
+        local alias_name="${line%%=*}"
+        local alias_cmd="${line#*=}"
+
+        # Skip management aliases
+        [[ "$alias_name" =~ ^(ah|aw|af|an|aa|ae|ap|au|als)$ ]] && continue
+
+        ((total_aliases++))
+
+        if [[ "$has_metadata" == "true" ]]; then
+            local source=$(jq -r ".alias_sources[\"$alias_name\"] // \"custom\"" "$metadata_file" 2>/dev/null)
+            if [[ "$source" == "custom" || -z "$source" ]]; then
+                custom_aliases_list[$alias_name]="$alias_cmd"
+            else
+                if [[ -z "${pack_aliases[$source]}" ]]; then
+                    pack_aliases[$source]="$alias_name=$alias_cmd"
+                else
+                    pack_aliases[$source]="${pack_aliases[$source]}\n$alias_name=$alias_cmd"
+                fi
+            fi
+        else
+            custom_aliases_list[$alias_name]="$alias_cmd"
+        fi
+    done < <(alias 2>/dev/null)
+
+    echo "📊 TOTAL: ${total_aliases} aliases"
+    echo ""
+
+    # Show pack-based aliases with file paths
+    if [[ ${#pack_aliases[@]} -gt 0 ]]; then
+        for pack in "${(@k)pack_aliases}"; do
+            # Find pack file
+            local pack_file=""
+            for dir in "${HOME}/.config/smart-aliases/packs/local" "${HOME}/.config/smart-aliases/packs/community"; do
+                if [[ -f "$dir/${pack}.json" ]]; then
+                    pack_file="$dir/${pack}.json"
+                    break
+                fi
+            done
+
+            # Get all alias names from the pack file
+            local alias_names=()
+            if [[ -n "$pack_file" ]] && command -v jq &>/dev/null; then
+                while IFS= read -r name; do
+                    alias_names+=("$name")
+                done < <(jq -r '.aliases[].name' "$pack_file" 2>/dev/null)
+            fi
+
+            local count=${#alias_names[@]}
+            echo "📦 Pack: $pack ($count aliases)"
+            echo "📁 File: $pack_file"
+            echo ""
+
+            # Process each alias
+            for name in "${alias_names[@]}"; do
+                # Get description from pack file
+                local desc=""
+                if [[ -n "$pack_file" ]] && command -v jq &>/dev/null; then
+                    desc=$(jq -r ".aliases[] | select(.name == \"$name\") | .description // \"\"" "$pack_file" 2>/dev/null)
+                fi
+
+                # Use command if description is generic or empty
+                if [[ -z "$desc" ]] || [[ "$desc" == "$name command" ]] || [[ "$desc" == "$name"* && ${#desc} -lt 20 ]]; then
+                    local cmd=$(alias "$name" 2>/dev/null | sed "s/^$name=//")
+                    cmd="${cmd//\'/}"
+                    cmd="${cmd//\"/}"
+                    cmd="${cmd//$'\n'/ }"
+                    cmd="${cmd//  / }"
+                    cmd="${cmd## }"
+                    cmd="${cmd#\$}"
+                    desc="$cmd"
+                fi
+
+                # Truncate very long descriptions/commands
+                if [[ ${#desc} -gt 60 ]]; then
+                    desc="${desc:0:57}..."
+                fi
+
+                printf "  %-15s → %s\n" "$name" "$desc"
+            done
+            echo ""
+        done
+    fi
+
+    # Show custom aliases
+    if [[ ${#custom_aliases_list[@]} -gt 0 ]]; then
+        local custom_count=${#custom_aliases_list[@]}
+        echo "✏️  Custom aliases ($custom_count) - Session only"
+        echo "📁 File: Not saved to pack"
+        echo ""
+        for alias_name in "${(@k)custom_aliases_list}"; do
+            local cmd="${custom_aliases_list[$alias_name]}"
+
+            # Clean up command
+            cmd="${cmd//\'/}"
+            cmd="${cmd//\"/}"
+            cmd="${cmd//$'\n'/ }"
+            cmd="${cmd//  / }"
+
+            # Truncate long commands
+            if [[ ${#cmd} -gt 60 ]]; then
+                cmd="${cmd:0:57}..."
+            fi
+
+            printf "  %-15s → %s\n" "$alias_name" "$cmd"
+        done
+        echo ""
+    fi
+
+    echo "💡 TIP: Use 'alias-help <name>' for specific alias info"
+    echo "💡 TIP: Use 'aw <name>' to see full command and file location"
+    echo "💡 TIP: Use 'alias-update <name>' to modify an alias"
+}
+
 alias-analyze() {
     echo "📊 Analyzing Command History..."
     echo "================================"
     echo ""
-    
+
     # Analyze command history for patterns
     echo "🔝 Top 20 Most Used Commands:"
     if [[ -n "$HISTFILE" ]]; then
         history | awk '{$1=""; print $0}' | sed 's/^[ \t]*//' | sort | uniq -c | sort -rn | head -20 | while read count cmd; do
-            # Check if command has an alias
+            # First check if the entire command itself is an alias
             local first_word=$(echo "$cmd" | awk '{print $1}')
-            local has_alias=$(alias | grep "='$first_word" | head -1)
-            if [[ -n "$has_alias" ]]; then
+            local is_alias=$(alias "$first_word" 2>/dev/null)
+
+            if [[ -n "$is_alias" ]]; then
                 echo "  $count× $cmd ✅ (aliased)"
             else
                 echo "  $count× $cmd ⚠️ (no alias)"
@@ -497,10 +773,10 @@ alias-analyze() {
     else
         fc -l 1 2>/dev/null | awk '{$1=""; print $0}' | sed 's/^[ \t]*//' | sort | uniq -c | sort -rn | head -20
     fi
-    
+
     echo ""
     echo "💡 OPTIMIZATION SUGGESTIONS:"
-    
+
     # Find long commands without aliases
     local long_commands=$(history 2>/dev/null | awk '{$1=""; print $0}' | sed 's/^[ \t]*//' | awk 'length > 20' | sort | uniq -c | sort -rn | head -5)
     if [[ -n "$long_commands" ]]; then
@@ -508,18 +784,105 @@ alias-analyze() {
         echo "📝 Long commands that could benefit from aliases:"
         echo "$long_commands" | while read count cmd; do
             if [[ $count -gt 2 ]]; then
+                # Check if command already has an alias
+                local first_word=$(echo "$cmd" | awk '{print $1}')
+                local existing_alias=$(alias "$first_word" 2>/dev/null)
+
+                if [[ -n "$existing_alias" ]]; then
+                    # Skip if already aliased
+                    continue
+                fi
+
                 echo "  $count× $cmd"
-                # Suggest an alias
-                local words=($cmd)
-                local suggestion=""
-                for word in "${words[@]:0:3}"; do
-                    suggestion+="${word:0:1}"
+
+                # Generate smart suggestions based on command
+                local suggestions=()
+                if [[ -n "$ZSH_VERSION" ]]; then
+                    setopt SH_WORD_SPLIT
+                    local words=($cmd)
+                    unsetopt SH_WORD_SPLIT
+                else
+                    local words=($cmd)
+                fi
+
+                # Build suggestions based on command type
+                case "$first_word" in
+                    git)
+                        local git_cmd="${words[2]}"
+                        suggestions+=("g${git_cmd:0:1}")
+                        suggestions+=("g${git_cmd:0:2}")
+                        if [[ "${#words[@]}" -gt 2 ]]; then
+                            suggestions+=("g${git_cmd:0:1}${words[3]:0:1}")
+                        fi
+                        ;;
+                    docker)
+                        if [[ "${words[2]}" == "compose" ]]; then
+                            suggestions+=("dc${words[3]:0:1}")
+                            suggestions+=("dc${words[3]:0:2}")
+                        else
+                            suggestions+=("d${words[2]:0:1}")
+                            suggestions+=("d${words[2]:0:2}")
+                        fi
+                        ;;
+                    kubectl|k)
+                        suggestions+=("k${words[2]:0:1}")
+                        suggestions+=("k${words[2]:0:2}")
+                        if [[ "${#words[@]}" -gt 2 ]]; then
+                            suggestions+=("k${words[2]:0:1}${words[3]:0:1}")
+                        fi
+                        ;;
+                    npm)
+                        suggestions+=("n${words[2]:0:1}")
+                        suggestions+=("n${words[2]:0:2}")
+                        ;;
+                    yarn)
+                        suggestions+=("y${words[2]:0:1}")
+                        suggestions+=("y${words[2]:0:2}")
+                        ;;
+                    mvn|maven)
+                        suggestions+=("m${words[2]:0:1}")
+                        suggestions+=("m${words[2]:0:2}")
+                        ;;
+                    aws)
+                        suggestions+=("a${words[2]:0:1}")
+                        suggestions+=("a${words[2]:0:2}")
+                        if [[ "${#words[@]}" -gt 2 ]]; then
+                            suggestions+=("a${words[2]:0:1}${words[3]:0:1}")
+                        fi
+                        ;;
+                    *)
+                        # Generic suggestions using initials
+                        local initials=""
+                        for word in "${words[@]:1:3}"; do
+                            initials+="${word:0:1}"
+                        done
+                        suggestions+=("$initials")
+                        suggestions+=("${first_word:0:2}")
+                        suggestions+=("${first_word:0:3}")
+                        ;;
+                esac
+
+                # Check which suggestions are available
+                local available_suggestions=()
+                for suggestion in "${suggestions[@]}"; do
+                    if [[ -n "$suggestion" ]]; then
+                        local existing=$(alias "$suggestion" 2>/dev/null)
+                        if [[ -z "$existing" ]]; then
+                            available_suggestions+=("$suggestion")
+                        fi
+                    fi
                 done
-                echo "     → Suggested alias: $suggestion"
+
+                # Display suggestions
+                if [[ ${#available_suggestions[@]} -gt 0 ]]; then
+                    echo "     → Suggested aliases: ${available_suggestions[*]}"
+                else
+                    echo "     → No simple suggestions available (common aliases taken)"
+                fi
             fi
         done
     fi
-    
+
     echo ""
     echo "🎯 Next Steps:"
     echo "  1. Use 'alias-new <command>' to create aliases for frequent commands"
@@ -532,6 +895,8 @@ alias ah='alias-help'
 alias aw='alias-which'
 alias af='alias-find'
 alias an='alias-new'
+alias au='alias-update'
+alias als='alias-aliases'
 alias aa='alias-analyze'
 
 # Export functions so they're available in subshells
@@ -541,5 +906,7 @@ if [[ -n "$BASH_VERSION" ]]; then
     export -f alias-which
     export -f alias-find
     export -f alias-new
+    export -f alias-update
+    export -f alias-aliases
     export -f alias-analyze
 fi
