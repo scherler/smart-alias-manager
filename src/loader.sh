@@ -54,6 +54,19 @@ if [[ -f "${SCRIPT_DIR}/alias-manager.sh" ]]; then
     source "${SCRIPT_DIR}/alias-manager.sh"
 fi
 
+# Load agent mode (command interceptor)
+if [[ -f "${SCRIPT_DIR}/command-interceptor.sh" ]]; then
+    source "${SCRIPT_DIR}/command-interceptor.sh"
+fi
+
+# Load agent management commands
+if [[ -f "${SCRIPT_DIR}/agent-commands.sh" ]]; then
+    source "${SCRIPT_DIR}/agent-commands.sh"
+fi
+
+# Initialize agent if enabled
+smart_alias_agent_init
+
 # Export useful variables
 export SMART_ALIAS_MANAGER_DIR="${SCRIPT_DIR:h}"
 export SMART_ALIAS_CONFIG="${CONFIG_FILE}"

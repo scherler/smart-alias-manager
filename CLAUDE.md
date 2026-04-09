@@ -1,73 +1,148 @@
-# Smart Alias Manager - Claude Code Configuration
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Global Personality System
+
+**IMPORTANT:** This project uses the global Claude Code personality system located at `~/.clauderc-personalities/`.
+
+The `smart-alias-expert.md` personality contains user workflow preferences and should be consulted when working on this project. Load it via the global `~/.claude/CLAUDE.md` instructions.
 
 ## Project Overview
 
-Smart Alias Manager is a powerful modular alias management system with JSON-based pack support. It provides:
-- Modular alias packs organized by category (git, docker, maven, npm-yarn, etc.)
-- Fast cache-based loading (<15ms startup)
-- Interactive alias creation, updating, and management
-- Command history analysis for optimization suggestions
-- Conflict detection and resolution
-- Remote pack support
+Smart Alias Manager is a modular shell alias management system with JSON-based packs and an intelligent agent mode that learns from command usage patterns.
 
-**Tech Stack:** Shell scripting (zsh/bash), JSON (jq), Python (for extraction)
+**Tech Stack:** Shell (zsh/bash), JSON (jq), Python (for extraction)
+
+**Key Features:**
+- Modular JSON-based alias packs with conflict detection
+- Cache-based loading (<15ms startup)
+- Agent mode: Command interceptor that learns patterns and suggests aliases
+- Cross-shell compatibility (zsh and bash)
 
 ## Project Structure
 
 ```
-smart-alias-manager/
-├── src/                          # All core scripts
-│   ├── loader.sh                 # Main entry point (sources all components)
-│   ├── alias-manager.sh          # Core alias management commands
-│   ├── alias-enable.sh           # Pack management system
-│   ├── functions.sh              # Utility functions (jrun, etc.)
-│   ├── extract-aliases.py        # Python script to extract existing aliases
-│   └── jrun-enhanced.sh          # Jenkins runner with port checking
-├── packs/
-│   └── templates/                # Example alias packs
-├── docs/                         # Comprehensive documentation
-├── reports/                      # Generated reports
-└── ~/.config/smart-aliases/      # User configuration directory
-    ├── config.json               # User settings
-    ├── cache.sh                  # Pre-generated alias cache
-    ├── metadata.json             # Alias source tracking
-    └── packs/local/              # User's custom packs
+src/
+├── loader.sh              # Entry point - sources all components
+├── alias-manager.sh       # Core commands: alias-new, alias-update, alias-which, etc.
+├── alias-enable.sh        # Pack management: enable/disable/refresh
+├── functions.sh           # Utility functions (jrun, port checking)
+├── command-interceptor.sh # Agent mode: preexec hook for command interception
+├── agent-commands.sh      # Agent commands: enable/disable/stats
+└── extract-aliases.py     # Extract existing aliases to JSON packs
+
+~/.config/smart-aliases/   # User config (created on first run)
+├── config.json            # Enabled packs and settings
+├── cache.sh               # Pre-generated alias cache (auto-generated)
+├── metadata.json          # Alias source tracking
+├── agent-config.json      # Agent mode configuration
+└── packs/local/           # User's custom packs
 ```
 
-## Key Files
+## Essential Commands
 
-- **src/loader.sh** - Entry point, sources all components
-- **src/alias-manager.sh** - Commands: alias-help, alias-new, alias-update, alias-which, alias-aliases, alias-analyze
-- **src/alias-enable.sh** - Pack management: alias-enable, alias-packs, alias-refresh, alias-autoload
-- **src/functions.sh** - Utility functions like jrun (Jenkins runner)
-- **~/.config/smart-aliases/cache.sh** - Pre-generated cache for fast loading
-- **~/.config/smart-aliases/metadata.json** - Tracks which pack each alias comes from
+### Development & Testing
 
-## Core Commands
+```bash
+# Load the system in a test shell
+source src/loader.sh
 
-### Alias Management
-- `alias-help` (ah) - Show help and list aliases
-- `alias-which` (aw) - Show alias command and file location
-- `alias-find` (af) - Search for aliases
-- `alias-new` (an) - Create new alias interactively
-- `alias-update` (au) - Update existing alias
-- `alias-aliases` (als) - List all aliases with file paths
-- `alias-analyze` (aa) - Analyze command history for optimization
+# Test individual functions
+source src/alias-manager.sh && alias-help
 
-### Pack Management
-- `alias-packs` (ap) - List available packs
-- `alias-enable <pack>` (ae) - Enable/disable packs
-- `alias-refresh` (ar) - Regenerate cache
+# Test pack loading
+source src/alias-enable.sh && alias-packs
 
-## Architecture Patterns
+# Regenerate cache (after modifying packs)
+alias-refresh
 
-### Cache System
-- Pre-generates `cache.sh` containing all enabled aliases
-- Shell startup simply sources cache.sh (no JSON parsing)
-- Cache regenerates automatically when packs change
-- Achieves <15ms load time
+# Validate JSON pack structure
+jq empty packs/templates/git-essentials.json
+```
 
-### Pack Structure (JSON)
+### Testing Shell Compatibility
+
+**CRITICAL:** All changes must work in both zsh and bash.
+
+```bash
+# Test in zsh
+zsh -c "source src/loader.sh && alias-new 'git status'"
+
+# Test in bash
+bash -c "source src/loader.sh && alias-new 'git status'"
+```
+
+**Key differences to handle:**
+- Array indexing: zsh starts at 1, bash starts at 0
+- Word splitting: zsh requires `setopt SH_WORD_SPLIT`
+- Use `[[ -n "$ZSH_VERSION" ]]` for zsh-specific code
+- Test both shells for every PR
+
+### User Commands (for reference)
+
+```bash
+# Alias management
+alias-help (ah)           # List all commands
+alias-new (an)            # Create new alias interactively
+alias-which (aw)          # Show alias command and source
+alias-analyze (aa)        # Analyze history for suggestions
+
+# Pack management
+alias-packs (ap)          # List available packs
+alias-enable <pack> (ae)  # Enable/disable packs
+alias-refresh (ar)        # Regenerate cache
+
+# Agent mode (learning mode)
+alias-agent-enable (aae)  # Enable command learning
+alias-agent-status (aas)  # Show agent status
+alias-agent-stats (aast)  # Show learning statistics
+```
+
+## Critical Architecture Patterns
+
+### 1. Cache System (Performance-Critical)
+
+**How it works:**
+1. JSON packs are parsed once during `alias-enable` or `alias-refresh`
+2. All enabled aliases are pre-generated into `~/.config/smart-aliases/cache.sh`
+3. Shell startup sources `cache.sh` directly (no JSON parsing)
+4. Achieves <15ms load time
+
+**Implementation:** `src/alias-enable.sh` → `generate_cache()` function
+
+**When modifying:**
+- Test cache generation: `alias-refresh && cat ~/.config/smart-aliases/cache.sh`
+- Verify syntax: `zsh -n ~/.config/smart-aliases/cache.sh`
+- Profile load time: `time zsh -i -c exit`
+
+### 2. Agent Mode (Command Interception)
+
+**Architecture:**
+- Uses zsh's `preexec_functions` hook to intercept commands before execution
+- Tracks command patterns in `~/.config/smart-aliases/command-patterns.json`
+- Analyzes frequency and suggests aliases for commands seen 3+ times
+- Also detects when user types long form of existing aliases
+
+**Key files:**
+- `src/command-interceptor.sh` - Hook implementation
+- `src/agent-commands.sh` - User-facing commands (enable/disable/stats)
+
+**How it works:**
+1. `preexec` hook fires before each command
+2. Command is analyzed (length, frequency, existing aliases)
+3. If eligible, prompt user to create alias (5s timeout)
+4. Stats tracked in `agent-stats.json`
+
+**Critical behavior:**
+- Skips commands <8 chars, sensitive keywords, or already aliased
+- Zero overhead for short commands (early return)
+- Respects user rejections (stored in `rejections.json`)
+
+**Initialize:** Automatic via `loader.sh` → `smart_alias_agent_init()`
+
+### 3. JSON Pack Schema
+
 ```json
 {
   "name": "git",
@@ -86,358 +161,197 @@ smart-alias-manager/
 }
 ```
 
-### Metadata Tracking
-- `metadata.json` tracks which pack each alias comes from
-- Enables features like showing file location with `aw`
-- Supports conflict detection
+**Validation:** Always run `jq empty <file>` after modifications
 
-## Expert Personalities
+### 4. Metadata Tracking
 
-When working on this project, adopt these expert personas based on the task:
+`metadata.json` tracks which pack each alias came from, enabling:
+- `alias-which <name>` to show source file
+- Conflict detection across packs
+- Selective pack disable (removes only that pack's aliases)
 
-### 1. Shell Scripting Expert (Zsh/Bash)
+## Shell Compatibility Requirements
 
-**When to use:** Working on .sh files, shell functions, or shell-specific features
+### Zsh-Specific Code Patterns
 
-**Expertise:**
-- Deep knowledge of zsh and bash differences (arrays start at 1 in zsh, 0 in bash)
-- Word splitting behavior (`setopt SH_WORD_SPLIT` for zsh)
-- Parameter expansion and string manipulation
-- Proper quoting and escaping
-- Function definitions and exports
-- Process substitution and command substitution
-
-**Key considerations:**
-- Always handle both zsh and bash compatibility
-- Use `[[ -n "$ZSH_VERSION" ]]` for zsh-specific code
-- Prefer built-in string operations over external commands
-- Handle edge cases (empty strings, special characters)
-- Use proper error handling and return codes
-
-**Example approach:**
 ```bash
-# Handle word splitting across shells
+# Array access (zsh is 1-indexed)
+if [[ -n "$ZSH_VERSION" ]]; then
+    first="${array[1]}"
+else
+    first="${array[0]}"
+fi
+
+# Word splitting
 if [[ -n "$ZSH_VERSION" ]]; then
     setopt SH_WORD_SPLIT
-    local words=($command)
+    words=($command)
     unsetopt SH_WORD_SPLIT
 else
-    local words=($command)
+    words=($command)
 fi
 ```
 
-### 2. JSON Processing Architect
+### Function Exports (Bash Compatibility)
 
-**When to use:** Working with pack files, config.json, or jq operations
-
-**Expertise:**
-- jq query language and filters
-- JSON schema design and validation
-- Safe JSON manipulation (escaping, quoting)
-- Atomic file updates (write to .tmp, then mv)
-- JSON validation after modifications
-
-**Key considerations:**
-- Always escape strings for JSON: `sed 's/\\/\\\\/g' | sed 's/"/\\"/g'`
-- Validate JSON after modifications: `jq empty "$file"`
-- Use atomic updates: write to temp file, validate, then move
-- Handle missing fields with `// "default"`
-- Quote jq filters properly
-
-**Example approach:**
 ```bash
-# Safe JSON update
-local escaped_cmd=$(echo "$cmd" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
-jq ".aliases += [{\"name\": \"$name\", \"command\": \"$escaped_cmd\"}]" \
-   "$pack_file" > "${pack_file}.tmp" && mv "${pack_file}.tmp" "$pack_file"
+# Define function
+my_function() {
+    echo "hello"
+}
 
-# Validate
-if ! jq empty "$pack_file" 2>/dev/null; then
-    echo "❌ Error: Invalid JSON"
-    return 1
+# Export for bash (no-op in zsh)
+if [[ -z "$ZSH_VERSION" ]]; then
+    export -f my_function
 fi
 ```
 
-### 3. Alias Management Specialist
-
-**When to use:** Working on alias creation, detection, or suggestion logic
-
-**Expertise:**
-- Alias naming conventions and best practices
-- Smart suggestion algorithms based on command patterns
-- Conflict detection and resolution
-- Alias availability checking
-- Category detection (git, docker, aws, etc.)
-
-**Key considerations:**
-- Check if alias exists: `alias "$name" 2>/dev/null`
-- Generate multiple suggestions, check availability
-- Categorize commands correctly (git → git pack, docker → docker pack)
-- Handle edge cases (single character aliases, special characters)
-- Skip management aliases (ah, aw, af, an, au, als, aa, ap, ae, ar)
-
-**Pattern recognition:**
-```bash
-case "$first_word" in
-    git) suggestions=("g${second_word:0:1}" "g${second_word:0:2}") ;;
-    docker) suggestions=("d${second_word:0:1}" "d${second_word:0:2}") ;;
-    aws) suggestions=("a${second_word:0:1}" "a${second_word:0:2}") ;;
-    *) # generic initials
-esac
-```
-
-### 4. Cache & Performance Engineer
-
-**When to use:** Optimizing load times, cache generation, or performance issues
-
-**Expertise:**
-- Static cache generation strategies
-- Minimizing shell startup overhead
-- Efficient file I/O patterns
-- Lazy loading vs pre-loading tradeoffs
-- Performance profiling (`time` command)
-
-**Key considerations:**
-- Pre-generate everything possible (cache.sh approach)
-- Avoid JSON parsing at shell startup
-- Minimize subshell spawning
-- Use built-in shell features over external commands
-- Profile before and after optimizations
-
-**Current performance targets:**
-- Shell startup: <15ms (achieved via cache.sh)
-- Cache regeneration: <100ms acceptable (not in critical path)
-- Alias lookup: instant (native shell alias)
-
-### 5. User Experience Designer
-
-**When to use:** Working on command output, help text, or interactive features
-
-**Expertise:**
-- Clear, concise terminal output
-- Progressive disclosure (show summary, offer details)
-- Helpful error messages with actionable suggestions
-- Consistent formatting and alignment
-- Emoji usage for visual scanning (📦 packs, ✅ success, ❌ errors)
-
-**Key considerations:**
-- Keep output concise but informative
-- Always provide "next steps" suggestions
-- Use consistent emoji patterns
-- Align columns with `printf "%-15s → %s\n"`
-- Show file paths for transparency
-- Truncate long output (limit to 20 items, show "... and X more")
-
-**Output patterns:**
-```bash
-echo "📌 Alias: $name"
-echo "Command: $command"
-echo "File:    📁 $file_path"
-echo ""
-echo "💡 TIP: Use 'command' for more info"
-```
-
-### 6. Testing & Validation Expert
-
-**When to use:** Adding new features, fixing bugs, or ensuring reliability
-
-**Expertise:**
-- Edge case identification
-- Input validation and sanitization
-- Error handling and recovery
-- Integration testing strategies
-- Regression testing
-
-**Key test scenarios:**
-- Alias name conflicts
-- Special characters in commands (quotes, $, |, etc.)
-- Missing files or directories
-- Empty or malformed JSON
-- Cross-shell compatibility (zsh vs bash)
-- Concurrent modifications
-- Large pack files (performance)
-
-**Validation checklist:**
-- ✅ Check if required tools exist (jq, etc.)
-- ✅ Validate input parameters
-- ✅ Check file existence before operations
-- ✅ Validate JSON after modifications
-- ✅ Test with both zsh and bash
-- ✅ Handle edge cases gracefully
-
-### 7. Documentation Curator
-
-**When to use:** Updating docs, README, or inline help
-
-**Expertise:**
-- Clear technical writing
-- Example-driven documentation
-- Consistent terminology
-- Maintaining documentation accuracy
-- Progressive complexity (quick start → advanced)
-
-**Documentation structure:**
-1. What it does (1 sentence)
-2. Why you'd use it
-3. Simple example
-4. Advanced examples
-5. Edge cases or gotchas
-6. Related commands
-
-**Key principles:**
-- Every command should have examples
-- Show both short and long forms (au vs alias-update)
-- Document file locations
-- Explain the "why" not just the "how"
-- Keep README in sync with features
-
-### 8. Git Workflow Manager
-
-**When to use:** Committing changes, managing branches, or release planning
-
-**Expertise:**
-- Atomic commits (one logical change per commit)
-- Descriptive commit messages
-- Branch management strategies
-- Merge conflict resolution
-- Git history maintenance
-
-**Commit message format:**
-```
-<type>: <subject>
-
-<body with details>
-- Bullet points for features
-- List all significant changes
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-```
-
-**Types:** feat, fix, refactor, docs, style, test, chore
-
-## Common Tasks & Patterns
+## Common Development Tasks
 
 ### Adding a New Alias Management Command
 
 1. Add function to `src/alias-manager.sh`
-2. Add short alias at bottom of file
-3. Export function for bash compatibility
-4. Update `alias-help` to list new command
-5. Test with both zsh and bash
-6. Update documentation
-
-### Adding a New Pack
-
-1. Create JSON file in `packs/templates/` or `~/.config/smart-aliases/packs/local/`
-2. Follow pack schema (see docs/alias-pack-schema.md)
-3. Enable with `alias-enable <pack-name>`
-4. Verify cache regeneration
-5. Test aliases work correctly
+2. Add short alias at bottom of file: `alias an='alias-new'`
+3. Export for bash: `[[ -z "$ZSH_VERSION" ]] && export -f alias-new`
+4. Update `alias-help` function to document it
+5. Test in both zsh and bash
+6. Update this CLAUDE.md if non-obvious
 
 ### Modifying Cache Generation
 
-1. Edit `alias-enable.sh` → `generate_cache()` function
-2. Test with `alias-refresh`
-3. Verify load time: `time zsh -i -c exit`
-4. Ensure cache.sh is syntactically valid shell
+1. Edit `src/alias-enable.sh` → `generate_cache()` function
+2. Test: `alias-refresh && source ~/.config/smart-aliases/cache.sh`
+3. Verify all aliases work: `type <alias-name>`
+4. Profile: `time zsh -i -c exit` (should be <15ms)
 
-### Debugging Issues
+### Adding Agent Mode Features
 
-1. Check if jq is installed: `command -v jq`
-2. Verify config exists: `cat ~/.config/smart-aliases/config.json`
-3. Check cache validity: `source ~/.config/smart-aliases/cache.sh`
-4. Review metadata: `jq . ~/.config/smart-aliases/metadata.json`
-5. Test individual commands: `source src/loader.sh && <command>`
+1. Hook logic: `src/command-interceptor.sh` → `smart_alias_agent_hook()`
+2. Config schema: `smart_alias_agent_create_default_config()`
+3. Stats tracking: Update `agent-stats.json` structure
+4. Test: `aae` (enable), type commands, verify suggestions appear
 
-## Best Practices
+## Code Style & Safety
 
-### Code Style
-- Use `local` for function variables
-- Check command existence: `command -v tool &>/dev/null`
-- Quote variables: `"$var"` not `$var`
-- Use `[[ ]]` for conditionals, not `[ ]`
-- Prefer `$(command)` over backticks
-- Return explicit codes: `return 0` or `return 1`
+### Required Patterns
 
-### Error Handling
 ```bash
+# Check command exists before use
 if ! command -v jq &>/dev/null; then
     echo "❌ Error: jq is required"
-    echo "Install: sudo apt-get install jq"
     return 1
+fi
+
+# Atomic JSON updates (validate before overwrite)
+jq '.field = "value"' file.json > file.json.tmp
+if jq empty file.json.tmp 2>/dev/null; then
+    mv file.json.tmp file.json
+else
+    echo "❌ Invalid JSON"
+    rm file.json.tmp
+    return 1
+fi
+
+# Local variables in functions
+my_function() {
+    local var1="value"
+    local var2="value"
+}
+
+# Use [[ ]] for conditions, quote variables
+if [[ -n "$var" && -f "$file" ]]; then
+    echo "Valid"
 fi
 ```
 
-### User Feedback
-- Show progress for long operations
-- Provide actionable error messages
-- Confirm successful operations
-- Offer next steps or alternatives
+### Alias Name Validation
 
-### Performance
-- Avoid unnecessary subshells
-- Minimize external command calls
-- Use cache.sh for shell startup
-- Profile changes: `time` command
+Use `validate_alias_name()` from `src/alias-manager.sh` to prevent:
+- Shell special characters (`$|&;<>(){}[]'"` etc.)
+- Shell keywords (if, then, for, etc.)
+- Starting with `-` or digits
+- Empty strings, `.`, `..`
 
-## Recent Changes & Features
+## Debugging
 
-### Latest (Current Session)
-- Added `alias-update` (au) - Update existing aliases interactively
-- Added `alias-aliases` (als) - List all aliases with file paths
-- Enhanced `alias-which` (aw) - Now shows pack name and file location
-- Fixed `alias-analyze` (aa) - Correctly detects existing aliases
-- Fixed suggestion logic - Only shows available aliases
-- Added AWS command support to suggestions
+```bash
+# Check configuration
+cat ~/.config/smart-aliases/config.json
 
-### Configuration Updates
-- Updated xc alias to use `$AWS_PROFILE` environment variable
-- All changes committed and merged to main branch
+# Verify cache
+cat ~/.config/smart-aliases/cache.sh | grep "alias gs"
 
-## Development Workflow
+# Check metadata
+jq . ~/.config/smart-aliases/metadata.json
 
-1. **Feature branches:** Work on `feature/feature-name` branch
-2. **Commit frequently:** Atomic commits with clear messages
-3. **Test thoroughly:** Test with actual shell session
-4. **Update docs:** Keep README and help text in sync
-5. **Merge to main:** Fast-forward merge when ready
-6. **Tag releases:** Use semantic versioning
+# View agent stats
+jq . ~/.config/smart-aliases/agent-stats.json
 
-## Known Issues & Future Enhancements
+# Agent debug logs
+tail -f /tmp/smart-alias-debug.log
 
-### Known Issues
-- SSH key setup required for git push
-- Some alias suggestions may conflict with system commands
+# Test individual functions
+source src/loader.sh && alias-which gs
+```
 
-### Future Enhancements
-- Remote pack repository support
-- Alias usage statistics tracking
-- Automatic alias cleanup for unused aliases
-- Pack dependency management
-- Shell completion for commands
-- Interactive alias browser (TUI)
+## Testing Strategy
 
-## Getting Help
+**Manual testing approach:**
+1. Source `loader.sh` in test shell
+2. Run command and verify output
+3. Check generated files (`cache.sh`, `metadata.json`, etc.)
+4. Test edge cases (special characters, missing files, etc.)
+5. Test in both zsh and bash
 
-1. Run `alias-help` (ah) for command overview
-2. Check docs/ directory for detailed guides
-3. Review reports/ for setup and extraction details
-4. Use `aw <alias>` to see where an alias is defined
-5. Read inline comments in source files
+**Integration testing:**
+1. Fresh shell: `zsh -i` or `bash -i`
+2. Verify aliases loaded: `type <alias>`
+3. Test pack enable/disable cycle
+4. Test agent mode (if enabled)
 
-## Contributing Guidelines
+## Known Patterns & Conventions
 
-When contributing:
-1. Maintain zsh/bash compatibility
-2. Follow existing code style
-3. Update documentation
-4. Add examples for new features
-5. Test with actual shell sessions
-6. Write clear commit messages
-7. Update CLAUDE.md if adding new patterns
+### Emoji Usage
+
+- 📦 Packs
+- ✅ Success
+- ❌ Error
+- ⚠️ Warning
+- 💡 Tip/Suggestion
+- 🚀 Starting/Running
+- 📁 File path
+
+### Function Naming
+
+- `alias-*` - User-facing commands (exported, aliased)
+- `smart_alias_*` - Internal functions (not exported)
+- Snake_case for internal, kebab-case for user commands
+
+### File Locations
+
+- User config: `~/.config/smart-aliases/`
+- Project packs: `packs/templates/`
+- User packs: `~/.config/smart-aliases/packs/local/`
+- Cache: `~/.config/smart-aliases/cache.sh` (auto-generated)
+
+## Dependencies
+
+**Required:**
+- `jq` - JSON processing (all pack operations)
+- `zsh` or `bash` - Shell environment
+
+**Optional:**
+- `python3` - For `extract-aliases.py` (one-time extraction)
+- `lsof` or `nc` - For port checking in `jrun` function
+
+## Documentation
+
+- `README.md` - User-facing documentation
+- `docs/AGENT-MODE-README.md` - Agent mode quick start
+- `docs/SMART-COMMAND-AGENT-DESIGN.md` - Agent architecture
+- `docs/alias-pack-schema.md` - JSON schema reference
+- `reports/` - Generated reports (efficiency, setup, etc.)
 
 ---
 
-**Remember:** The goal is maximum efficiency with minimal configuration. Every feature should reduce keystrokes and improve the developer experience.
+**Key Principle:** Maximum efficiency with minimal configuration. Every feature should reduce keystrokes and improve developer experience.
