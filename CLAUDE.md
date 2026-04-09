@@ -2,12 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Global Personality System
-
-**IMPORTANT:** This project uses the global Claude Code personality system located at `~/.clauderc-personalities/`.
-
-The `smart-alias-expert.md` personality contains user workflow preferences and should be consulted when working on this project. Load it via the global `~/.claude/CLAUDE.md` instructions.
-
 ## Project Overview
 
 Smart Alias Manager is a modular shell alias management system with JSON-based packs and an intelligent agent mode that learns from command usage patterns.
