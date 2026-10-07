@@ -181,9 +181,9 @@ check_alias_conflicts() {
 
     # Check all aliases in the pack
     while IFS= read -r alias_json; do
-        local name=$(echo "$alias_json" | jq -r '.name')
-        local command=$(echo "$alias_json" | jq -r '.command')
-        local enabled=$(echo "$alias_json" | jq -r '.enabled // true')
+        local name=$(printf '%s\n' "$alias_json" | jq -r '.name')
+        local command=$(printf '%s\n' "$alias_json" | jq -r '.command')
+        local enabled=$(printf '%s\n' "$alias_json" | jq -r '.enabled // true')
 
         if [[ "$enabled" != "true" ]]; then
             continue
@@ -286,10 +286,10 @@ EOF
 
             # Extract and write aliases
             while IFS= read -r alias_json; do
-                local name=$(echo "$alias_json" | jq -r '.name')
-                local type=$(echo "$alias_json" | jq -r '.type')
-                local command=$(echo "$alias_json" | jq -r '.command')
-                local enabled=$(echo "$alias_json" | jq -r '.enabled // true')
+                local name=$(printf '%s\n' "$alias_json" | jq -r '.name')
+                local type=$(printf '%s\n' "$alias_json" | jq -r '.type')
+                local command=$(printf '%s\n' "$alias_json" | jq -r '.command')
+                local enabled=$(printf '%s\n' "$alias_json" | jq -r '.enabled // true')
 
                 if [[ "$enabled" != "true" ]]; then
                     continue
@@ -329,8 +329,8 @@ load_pack() {
     local skipped_aliases=()
     if [[ "$skip_conflicts" == "true" ]]; then
         while IFS= read -r alias_json; do
-            local name=$(echo "$alias_json" | jq -r '.name')
-            local enabled=$(echo "$alias_json" | jq -r '.enabled // true')
+            local name=$(printf '%s\n' "$alias_json" | jq -r '.name')
+            local enabled=$(printf '%s\n' "$alias_json" | jq -r '.enabled // true')
 
             if [[ "$enabled" != "true" ]]; then
                 continue
@@ -347,9 +347,9 @@ load_pack() {
     local alias_count=0
     local skipped_count=0
     while IFS= read -r alias_json; do
-        local name=$(echo "$alias_json" | jq -r '.name')
-        local type=$(echo "$alias_json" | jq -r '.type')
-        local enabled=$(echo "$alias_json" | jq -r '.enabled // true')
+        local name=$(printf '%s\n' "$alias_json" | jq -r '.name')
+        local type=$(printf '%s\n' "$alias_json" | jq -r '.type')
+        local enabled=$(printf '%s\n' "$alias_json" | jq -r '.enabled // true')
 
         if [[ "$enabled" != "true" ]]; then
             continue
@@ -362,12 +362,12 @@ load_pack() {
         fi
 
         if [[ "$type" == "alias" ]]; then
-            local command=$(echo "$alias_json" | jq -r '.command')
+            local command=$(printf '%s\n' "$alias_json" | jq -r '.command')
             alias "$name"="$command"
             record_alias_source "$name" "$pack_name"
             ((alias_count++))
         elif [[ "$type" == "global" ]]; then
-            local command=$(echo "$alias_json" | jq -r '.command')
+            local command=$(printf '%s\n' "$alias_json" | jq -r '.command')
             alias -g "$name"="$command"
             record_alias_source "$name" "$pack_name"
             ((alias_count++))
@@ -380,8 +380,8 @@ load_pack() {
     # Functions with newlines/tabs need proper escaping in JSON
     # TODO: Fix function extraction to properly escape control characters
     # while IFS= read -r func_json; do
-    #     local name=$(echo "$func_json" | jq -r '.name')
-    #     local body=$(echo "$func_json" | jq -r '.body')
+    #     local name=$(printf '%s\n' "$func_json" | jq -r '.name')
+    #     local body=$(printf '%s\n' "$func_json" | jq -r '.body')
     #
     #     # Create function using eval
     #     eval "function $name { $body }"
